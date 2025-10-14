@@ -10,6 +10,7 @@ def test_catalogue():
     catalogue_model = CatalogueModel(
         name="cat0",
         author="John",
+        attributes={"foo": "bar"}
     )
 
     catalogue = None
@@ -28,7 +29,7 @@ def test_catalogue():
         author="John",
     )
     event0 = db.create_event(event_model)
-    catalogue.add_event(event0)
+    catalogue.add_events(event0)
 
     assert loads(repr(catalogue)) == {
         "uuid": str(catalogue_model.uuid),
@@ -36,6 +37,7 @@ def test_catalogue():
         "author": "John",
         "name": "cat0",
         "tags": [],
+        "attributes": {"foo": "bar"},
     }
 
     assert catalogue.uuid == catalogue_model.uuid
@@ -48,9 +50,17 @@ def test_catalogue():
     catalogue.author = "Jeane"
     assert catalogue.author == "Jeane"
 
-    assert catalogue.tags == []
-    catalogue.tags = ["foo", "bar"]
-    assert catalogue.tags == ["foo", "bar"]
+    assert catalogue.tags == set()
+    added_tags = []
+    catalogue.on_add_tags(lambda x: added_tags.append(x))
+    catalogue.tags = {"foo", "bar"}
+    assert added_tags == [{"foo", "bar"}]
+    assert catalogue.tags == {"foo", "bar"}
+    removed_tags = []
+    catalogue.on_remove_tags(lambda x: removed_tags.append(x))
+    catalogue.remove_tags("foo")
+    assert catalogue.tags == {"bar"}
+    assert removed_tags == [{"foo"}]
 
     event1 = db.create_event(EventModel(
         start="2027-01-31",
@@ -68,12 +78,12 @@ def test_catalogue():
     def callback(value):
         values.append(value)
 
-    catalogue.on_change("name", callback)
+    catalogue.on_change_name(callback)
     catalogue.name = "cat1"
     assert values == ["cat1"]
 
     values.clear()
-    catalogue.on_change("author", callback)
+    catalogue.on_change_author(callback)
     catalogue.author = "Mike"
     assert values == ["Mike"]
 
@@ -91,7 +101,7 @@ def test_catalogue():
     assert added_events == [{event0, event2}]
 
     removed_events.clear()
-    catalogue.remove_event(event0)
+    catalogue.remove_events(event0)
     assert catalogue.events == {event2}
     assert removed_events == [{str(event0.uuid)}]
 

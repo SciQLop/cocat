@@ -12,6 +12,7 @@ def test_event():
         start="2025-01-31",
         stop="2026-01-31",
         author="John",
+        attributes={"foo": "bar"},
     )
 
     event = None
@@ -32,6 +33,7 @@ def test_event():
         "start": "2025-01-31 00:00:00",
         "stop": "2026-01-31 00:00:00",
         "tags": [],
+        "attributes": {"foo": "bar"},
     }
 
     assert event.uuid == event_model.uuid
@@ -48,13 +50,17 @@ def test_event():
     event.author = "Jeane"
     assert event.author == "Jeane"
 
-    assert event.tags == []
-    event.tags = ["foo", "bar"]
-    assert event.tags == ["foo", "bar"]
+    assert event.tags == set()
+    event.tags = {"foo", "bar"}
+    assert event.tags == {"foo", "bar"}
+    event.remove_tags("foo")
+    assert event.tags == {"bar"}
 
-    assert event.products == []
-    event.products = ["a", "b"]
-    assert event.products == ["a", "b"]
+    assert event.products == set()
+    event.products = {"a", "b"}
+    assert event.products == {"a", "b"}
+    event.remove_products("a")
+    assert event.products == {"b"}
 
     assert event.rating is None
     event.rating = 2
@@ -67,7 +73,7 @@ def test_event():
     def callback(value):
         values.append(value)
 
-    event.on_change("start", callback)
+    event.on_change_start(callback)
     event.start = "2025-01-29"
     event.stop = "2026-01-29"
     event.start = "2025-01-28"
@@ -75,19 +81,35 @@ def test_event():
     assert values == [datetime(2025, 1, 29, 0, 0), datetime(2025, 1, 28, 0, 0)]
 
     values.clear()
-    event.on_change("stop", callback)
+    event.on_change_stop(callback)
     event.stop = "2026-01-28"
     assert values == [datetime(2026, 1, 28, 0, 0)]
 
     values.clear()
-    event.on_change("author", callback)
+    event.on_change_author(callback)
     event.author = "Mike"
     assert values == ["Mike"]
 
     values.clear()
-    event.on_change("tags", callback)
-    event.tags = ["baz"]
-    assert values == [["baz"]]
+    event.on_change_rating(callback)
+    event.rating = 3
+    assert values == [3]
+
+    added_tags = []
+    removed_tags = []
+    event.on_add_tags(lambda x: added_tags.append(x))
+    event.on_remove_tags(lambda x: removed_tags.append(x))
+    event.tags = {"baz"}
+    assert added_tags == [{"baz"}]
+    assert removed_tags == [{"bar"}]
+
+    added_products = []
+    removed_products = []
+    event.on_add_products(lambda x: added_products.append(x))
+    event.on_remove_products(lambda x: removed_products.append(x))
+    event.products = {"baz"}
+    assert added_products == [{"baz"}]
+    assert removed_products == [{"b"}]
 
     deleted = False
 

@@ -70,31 +70,50 @@ class DB:
                             model = CatalogueModel.__pydantic_validator__.validate_assignment(CatalogueModel.model_construct(), key, value)
                             callback(getattr(model, key))
             elif len(path) == 2:
-                # catalogue events changed
-                assert path[1] == "events"
-                assert isinstance(event, MapEvent)
-                uuid = path[0]
-                if (
-                    "added_events" in self._catalogue_change_callbacks[uuid] or
-                    "removed_events" in self._catalogue_change_callbacks[uuid]
-                ):
-                    added_uuids = []
-                    removed_uuids = []
+                if path[1] == "events":
+                    # catalogue events changed
+                    assert isinstance(event, MapEvent)
+                    uuid = path[0]
+                    if (
+                        "add_events" in self._catalogue_change_callbacks[uuid] or
+                        "remove_events" in self._catalogue_change_callbacks[uuid]
+                    ):
+                        added_uuids = []
+                        removed_uuids = []
+                        keys = event.keys  # type: ignore[attr-defined]
+                        for key, val in keys.items():
+                            if val["action"] == "delete":
+                                removed_uuids.append(key)
+                            else:
+                                added_uuids.append(key)
+                        if removed_uuids:
+                            callbacks = self._catalogue_change_callbacks[uuid]["remove_events"]
+                            for callback in callbacks:
+                                callback(set(removed_uuids))
+                        if added_uuids:
+                            result = {Event.from_map(self._event_maps[added_uuid], self) for added_uuid in added_uuids}
+                            callbacks = self._catalogue_change_callbacks[uuid]["add_events"]
+                            for callback in callbacks:
+                                callback(result)
+                else:
+                    assert isinstance(event, MapEvent)
+                    uuid, name = path
+                    added = set()
+                    removed = set()
                     keys = event.keys  # type: ignore[attr-defined]
                     for key, val in keys.items():
                         if val["action"] == "delete":
-                            removed_uuids.append(key)
+                            removed.add(key)
                         else:
-                            added_uuids.append(key)
-                    if removed_uuids:
-                        callbacks = self._catalogue_change_callbacks[uuid]["removed_events"]
+                            added.add(key)
+                    if removed:
+                        callbacks = self._catalogue_change_callbacks[uuid][f"remove_{name}"]
                         for callback in callbacks:
-                            callback(set(removed_uuids))
-                    if added_uuids:
-                        result = {Event.from_map(self._event_maps[added_uuid], self) for added_uuid in added_uuids}
-                        callbacks = self._catalogue_change_callbacks[uuid]["added_events"]
+                            callback(removed)
+                    if added:
+                        callbacks = self._catalogue_change_callbacks[uuid][f"add_{name}"]
                         for callback in callbacks:
-                            callback(result)
+                            callback(added)
 
     def _events_changed(self, events: list[MapEvent]) -> None:
         for event in events:
@@ -126,6 +145,25 @@ class DB:
                             value = changed_keys[key]["newValue"]
                             model = EventModel.__pydantic_validator__.validate_assignment(EventModel.model_construct(), key, value)
                             callback(getattr(model, key))
+            elif len(path) == 2:
+                assert isinstance(event, MapEvent)
+                uuid, name = path
+                added = set()
+                removed = set()
+                keys = event.keys  # type: ignore[attr-defined]
+                for key, val in keys.items():
+                    if val["action"] == "delete":
+                        removed.add(key)
+                    else:
+                        added.add(key)
+                if removed:
+                    callbacks = self._event_change_callbacks[uuid][f"remove_{name}"]
+                    for callback in callbacks:
+                        callback(removed)
+                if added:
+                    callbacks = self._event_change_callbacks[uuid][f"add_{name}"]
+                    for callback in callbacks:
+                        callback(added)
 
     @property
     def catalogues(self) -> set[Catalogue]:
@@ -143,7 +181,7 @@ class DB:
                 if isinstance(events, Event):
                     events = [events]
                 for event in events:
-                   catalogue.add_event(event)
+                   catalogue.add_events(event)
         return catalogue
 
     def create_event(self, model: EventModel) -> Event:

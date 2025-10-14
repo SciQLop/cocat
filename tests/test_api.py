@@ -79,7 +79,7 @@ def test_add_event():
         stop="2026-01-31",
         author="John",
     ))
-    catalogue.add_event(event)
+    catalogue.add_events(event)
 
     assert db0.catalogues == db1.catalogues == {catalogue}
     assert db0.events == db1.events == {event}
