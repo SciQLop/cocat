@@ -3,10 +3,10 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from json import dumps
 from typing import Any, TYPE_CHECKING, cast
-from uuid import UUID
 
 from pycrdt import Map
 
+from .base import Mixin
 from .event import Event
 from .models import CatalogueModel
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class Catalogue:
+class Catalogue(Mixin):
     _uuid: str
     _map: Map
     _db: "DB"
@@ -42,8 +42,8 @@ class Catalogue:
             self._check_deleted()
             dct = self._map.to_py()
             assert dct is not None
-            dct["tags"] = [key for key, val in dct["tags"].items()]
-            dct["events"] = [key for key, val in dct["events"].items()]
+            dct["tags"] = list(dct["tags"].keys())
+            dct["events"] = list(dct["events"].keys())
             return dumps(dct)
 
     def __hash__(self) -> int:
@@ -62,43 +62,11 @@ class Catalogue:
         val = getattr(model, name)
         self._map[name] = val
 
-    def _get_from_map(self, field: str) -> set[str]:
-        self._check_deleted()
-        with self._map.doc.transaction():
-            map = cast(Map, self._map[field])
-            return {key for key in map.keys()}
-
-    def _set_in_map(self, field: str, value: set[str]) -> None:
-        self._check_deleted()
-        with self._map.doc.transaction():
-            map = cast(Map, self._map[field])
-            map.clear()
-            method = getattr(self, f"add_{field}")
-            for val in value:
-                method(val)
-
     def _on_change(self, name: str, callback: Callable[[Any], None]) -> None:
         self._check_deleted()
-        with self._map.doc.transaction():
-            self._db._catalogue_change_callbacks[self._uuid][name].append(callback)
+        self._db._catalogue_change_callbacks[self._uuid][name].append(callback)
 
-    def _add(self, field: str, names: Iterable[str] | str) -> None:
-        self._check_deleted()
-        name_list = [names] if isinstance(names, str) else names
-        with self._map.doc.transaction():
-            map = cast(Map, self._map[field])
-            for name in name_list:
-                map[name] = True
-
-    def _remove(self, field: str, names: Iterable[str] | str) -> None:
-        self._check_deleted()
-        name_list = [names] if isinstance(names, str) else names
-        with self._map.doc.transaction():
-            map = cast(Map, self._map[field])
-            for name in name_list:
-                del map[name]
-
-    def _on_add(self, field: str, callback: Callable[[list[Any]], None]):
+    def _on_add(self, field: str, callback: Callable[[Any], None]) -> None:
         self._check_deleted()
         self._db._catalogue_change_callbacks[self._uuid][f"add_{field}"].append(callback)
 
@@ -173,22 +141,6 @@ class Catalogue:
             for event in event_list:
                 del map[event._uuid]
 
-    def on_add_tags(self, callback: Callable[[list[str]], None]) -> None:
-        self._on_add("tags", callback)
-
-    def on_remove_tags(self, callback: Callable[[list[str]], None]) -> None:
-        self._on_remove("tags", callback)
-
-    def add_tags(self, names: Iterable[str] | str) -> None:
-        self._add("tags", names)
-
-    def remove_tags(self, names: Iterable[str] | str) -> None:
-        self._remove("tags", names)
-
-    @property
-    def uuid(self) -> UUID:
-        return UUID(self._uuid)
-
     @property
     def name(self) -> str:
         return self._get("name")
@@ -196,22 +148,6 @@ class Catalogue:
     @name.setter
     def name(self, value: str) -> None:
         self._set("name", value)
-
-    @property
-    def author(self) -> str:
-        return self._get("author")
-
-    @author.setter
-    def author(self, value: str) -> None:
-        self._set("author", value)
-
-    @property
-    def tags(self) -> set[str]:
-        return self._get_from_map("tags")
-
-    @tags.setter
-    def tags(self, value: set[str]) -> None:
-        self._set_in_map("tags", value)
 
     @property
     def events(self) -> set[Event]:

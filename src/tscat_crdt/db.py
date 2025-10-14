@@ -98,14 +98,14 @@ class DB:
                 else:
                     assert isinstance(event, MapEvent)
                     uuid, name = path
-                    added = set()
+                    added = {}
                     removed = set()
                     keys = event.keys  # type: ignore[attr-defined]
                     for key, val in keys.items():
                         if val["action"] == "delete":
                             removed.add(key)
-                        else:
-                            added.add(key)
+                        elif val["action"] == "add":
+                            added[key] = val["newValue"]
                     if removed:
                         callbacks = self._catalogue_change_callbacks[uuid][f"remove_{name}"]
                         for callback in callbacks:
@@ -148,14 +148,14 @@ class DB:
             elif len(path) == 2:
                 assert isinstance(event, MapEvent)
                 uuid, name = path
-                added = set()
+                added = {}
                 removed = set()
                 keys = event.keys  # type: ignore[attr-defined]
                 for key, val in keys.items():
                     if val["action"] == "delete":
                         removed.add(key)
-                    else:
-                        added.add(key)
+                    elif val["action"] == "add":
+                        added[key] = val["newValue"]
                 if removed:
                     callbacks = self._event_change_callbacks[uuid][f"remove_{name}"]
                     for callback in callbacks:

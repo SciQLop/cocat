@@ -56,11 +56,27 @@ def test_event():
     event.remove_tags("foo")
     assert event.tags == {"bar"}
 
+    assert event.attributes == {"foo": "bar"}
+    event.attributes = {"c": 1}
+    assert event.attributes == {"c": 1}
+    removed_attributes = []
+    added_attributes = []
+    event.on_remove_attributes(lambda x: removed_attributes.append(x))
+    event.on_add_attributes(lambda x: added_attributes.append(x))
+    event.add_attributes(d=2)
+    assert event.attributes == {"c": 1, "d": 2}
+    assert added_attributes == [{"d": 2}]
+    event.remove_attributes({"d"})
+    assert removed_attributes == [{"d"}]
+    assert event.attributes == {"c": 1}
+
     assert event.products == set()
     event.products = {"a", "b"}
     assert event.products == {"a", "b"}
     event.remove_products("a")
     assert event.products == {"b"}
+    event.add_products("c")
+    assert event.products == {"b", "c"}
 
     assert event.rating is None
     event.rating = 2
@@ -109,7 +125,7 @@ def test_event():
     event.on_remove_products(lambda x: removed_products.append(x))
     event.products = {"baz"}
     assert added_products == [{"baz"}]
-    assert removed_products == [{"b"}]
+    assert removed_products == [{"b", "c"}]
 
     deleted = False
 

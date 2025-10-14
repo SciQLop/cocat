@@ -3,11 +3,11 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from json import dumps
-from typing import Any, TYPE_CHECKING, cast
-from uuid import UUID
+from typing import Any, TYPE_CHECKING
 
 from pycrdt import Map
 
+from .base import Mixin
 from .models import EventModel
 
 if sys.version_info >= (3, 11):
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class Event:
+class Event(Mixin):
     _uuid: str
     _map: Map
     _db: "DB"
@@ -42,8 +42,8 @@ class Event:
             self._check_deleted()
             dct = self._map.to_py()
             assert dct is not None
-            dct["tags"] = [key for key, val in dct["tags"].items()]
-            dct["products"] = [key for key, val in dct["products"].items()]
+            dct["tags"] = list(dct["tags"].keys())
+            dct["products"] = list(dct["products"].keys())
             return dumps(dct)
 
     def __hash__(self) -> int:
@@ -64,43 +64,11 @@ class Event:
             val = func(val)
         self._map[name] = val
 
-    def _get_from_map(self, field: str) -> set[str]:
-        self._check_deleted()
-        with self._map.doc.transaction():
-            map = cast(Map, self._map[field])
-            return {key for key in map.keys()}
-
-    def _set_in_map(self, field: str, value: set[str]) -> None:
-        self._check_deleted()
-        with self._map.doc.transaction():
-            map = cast(Map, self._map[field])
-            map.clear()
-            method = getattr(self, f"add_{field}")
-            for val in value:
-                method(val)
-
     def _on_change(self, name: str, callback: Callable[[Any], None]) -> None:
         self._check_deleted()
-        with self._map.doc.transaction():
-            self._db._event_change_callbacks[self._uuid][name].append(callback)
+        self._db._event_change_callbacks[self._uuid][name].append(callback)
 
-    def _add(self, field: str, names: Iterable[str] | str) -> None:
-        self._check_deleted()
-        name_list = [names] if isinstance(names, str) else names
-        with self._map.doc.transaction():
-            map = cast(Map, self._map[field])
-            for name in name_list:
-                map[name] = True
-
-    def _remove(self, field: str, names: Iterable[str] | str) -> None:
-        self._check_deleted()
-        name_list = [names] if isinstance(names, str) else names
-        with self._map.doc.transaction():
-            map = cast(Map, self._map[field])
-            for name in name_list:
-                del map[name]
-
-    def _on_add(self, field: str, callback: Callable[[list[str]], None]):
+    def _on_add(self, field: str, callback: Callable[[Any], None]) -> None:
         self._check_deleted()
         self._db._event_change_callbacks[self._uuid][f"add_{field}"].append(callback)
 
@@ -165,18 +133,6 @@ class Event:
                     del catalogue_events[self._uuid]
 
     @property
-    def uuid(self) -> UUID:
-        return UUID(self._uuid)
-
-    @property
-    def author(self) -> str:
-        return self._get("author")
-
-    @author.setter
-    def author(self, value: str) -> None:
-        self._set("author", value)
-
-    @property
     def start(self) -> datetime:
         return self._get("start")
 
@@ -201,41 +157,26 @@ class Event:
         self._set("rating", value)
 
     @property
-    def tags(self) -> set[str]:
-        return self._get_from_map("tags")
-
-    @tags.setter
-    def tags(self, value: set[str]) -> None:
-        self._set_in_map("tags", value)
-
-    @property
     def products(self) -> set[str]:
-        return self._get_from_map("products")
+        return set(self._get_from_map("products"))
 
     @products.setter
     def products(self, value: set[str]) -> None:
-        self._set_in_map("products", value)
+        products = {val: True for val in value}
+        self._set_in_map("products", products)
 
-    def on_add_tags(self, callback: Callable[[list[str]], None]) -> None:
-        self._on_add("tags", callback)
+    def on_add_products(self, callback: Callable[[set[str]], None]) -> None:
 
-    def on_remove_tags(self, callback: Callable[[list[str]], None]) -> None:
-        self._on_remove("tags", callback)
+        def _callback(values: dict[str, Any]) -> None:
+            callback(set(values))
 
-    def add_tags(self, names: Iterable[str] | str) -> None:
-        self._add("tags", names)
-
-    def remove_tags(self, names: Iterable[str] | str) -> None:
-        self._remove("tags", names)
-
-    def on_add_products(self, callback: Callable[[list[str]], None]) -> None:
-        self._on_add("products", callback)
+        self._on_add("products", _callback)
 
     def on_remove_products(self, callback: Callable[[list[str]], None]) -> None:
         self._on_remove("products", callback)
 
-    def add_products(self, names: Iterable[str] | str) -> None:
-        self._add("products", names)
+    def add_products(self, keys: Iterable[str] | str) -> None:
+        self._add_keys("products", keys)
 
-    def remove_products(self, names: Iterable[str] | str) -> None:
-        self._remove("products", names)
+    def remove_products(self, keys: Iterable[str] | str) -> None:
+        self._remove_keys("products", keys)
