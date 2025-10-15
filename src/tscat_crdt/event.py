@@ -84,8 +84,8 @@ class Event(Mixin):
             start=str(model.start),
             stop=str(model.stop),
             author=model.author,
-            tags=Map(model.tags),
-            products=Map(model.products),
+            tags=Map({val: True for val in model.tags}),
+            products=Map({val: True for val in model.products}),
             rating=model.rating,
             attributes=Map(model.attributes),
         ))

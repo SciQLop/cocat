@@ -81,8 +81,8 @@ class Catalogue(Mixin):
             uuid=uuid,
             name=model.name,
             author=model.author,
-            tags=Map(model.tags),
-            events=Map(model.events),
+            tags=Map({val: True for val in model.tags}),
+            events=Map({val: True for val in model.events}),
             attributes=Map(model.attributes),
         ))
         self = cls(uuid, map, db)

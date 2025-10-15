@@ -37,6 +37,10 @@ class DB:
         self._event_change_callbacks: dict[str, dict[str, list[Callable[[Any], None]]]] = defaultdict(lambda: defaultdict(list))
         self._events: dict[str, Event] = {}
 
+    @property
+    def doc(self) -> Doc:
+        return self._doc
+
     def _catalogues_changed(self, events: list[ArrayEvent | MapEvent]) -> None:
         for event in events:
             path = event.path  # type: ignore[union-attr]

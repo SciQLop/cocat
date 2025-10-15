@@ -1,8 +1,12 @@
+from pycrdt import Doc
+
 from tscat_crdt import DB, CatalogueModel, EventModel
 
 
 def test_create_catalogue():
     db0 = DB()
+
+    assert isinstance(db0.doc, Doc)
 
     catalogue0 = db0.create_catalogue(CatalogueModel(
         name="cat0",
