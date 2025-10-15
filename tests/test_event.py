@@ -60,15 +60,18 @@ def test_event():
     event.attributes = {"c": 1}
     assert event.attributes == {"c": 1}
     removed_attributes = []
-    added_attributes = []
+    set_attributes = []
     event.on_remove_attributes(lambda x: removed_attributes.append(x))
-    event.on_add_attributes(lambda x: added_attributes.append(x))
-    event.add_attributes(d=2)
+    event.on_set_attributes(lambda x: set_attributes.append(x))
+    event.set_attributes(d=2)
     assert event.attributes == {"c": 1, "d": 2}
-    assert added_attributes == [{"d": 2}]
+    assert set_attributes == [{"d": 2}]
     event.remove_attributes({"d"})
     assert removed_attributes == [{"d"}]
     assert event.attributes == {"c": 1}
+    event.set_attributes(c=3)
+    assert set_attributes == [{"d": 2}, {"c": 3}]
+    assert event.attributes == {"c": 3}
 
     assert event.products == set()
     event.products = {"a", "b"}

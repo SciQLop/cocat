@@ -50,13 +50,13 @@ class Mixin:
             for key in key_list:
                 del map[key]
 
-    def on_add_attributes(self, callback: Callable[[list[str]], None]) -> None:
+    def on_set_attributes(self, callback: Callable[[list[str]], None]) -> None:
         self._on_add("attributes", callback)
 
     def on_remove_attributes(self, callback: Callable[[list[str]], None]) -> None:
         self._on_remove("attributes", callback)
 
-    def add_attributes(self, **kwargs: Any) -> None:
+    def set_attributes(self, **kwargs: Any) -> None:
         self._add_items("attributes", kwargs)
 
     def remove_attributes(self, keys: Iterable[str] | str) -> None:

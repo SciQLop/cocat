@@ -106,6 +106,8 @@ class DB:
                             removed.add(key)
                         elif val["action"] == "add":
                             added[key] = val["newValue"]
+                        elif val["action"] == "update":
+                            added[key] = val["newValue"]
                     if removed:
                         callbacks = self._catalogue_change_callbacks[uuid][f"remove_{name}"]
                         for callback in callbacks:
@@ -155,6 +157,8 @@ class DB:
                     if val["action"] == "delete":
                         removed.add(key)
                     elif val["action"] == "add":
+                        added[key] = val["newValue"]
+                    elif val["action"] == "update":
                         added[key] = val["newValue"]
                 if removed:
                     callbacks = self._event_change_callbacks[uuid][f"remove_{name}"]

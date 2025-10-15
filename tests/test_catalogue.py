@@ -69,15 +69,18 @@ def test_catalogue():
     catalogue.attributes = {"c": 1}
     assert catalogue.attributes == {"c": 1}
     removed_attributes = []
-    added_attributes = []
+    set_attributes = []
     catalogue.on_remove_attributes(lambda x: removed_attributes.append(x))
-    catalogue.on_add_attributes(lambda x: added_attributes.append(x))
-    catalogue.add_attributes(d=2)
+    catalogue.on_set_attributes(lambda x: set_attributes.append(x))
+    catalogue.set_attributes(d=2)
     assert catalogue.attributes == {"c": 1, "d": 2}
-    assert added_attributes == [{"d": 2}]
+    assert set_attributes == [{"d": 2}]
     catalogue.remove_attributes({"d"})
     assert removed_attributes == [{"d"}]
     assert catalogue.attributes == {"c": 1}
+    catalogue.set_attributes(c=3)
+    assert set_attributes == [{"d": 2}, {"c": 3}]
+    assert catalogue.attributes == {"c": 3}
 
     event1 = db.create_event(EventModel(
         start="2027-01-31",
