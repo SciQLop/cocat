@@ -26,7 +26,6 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
 ]
 
 dependencies = [
@@ -44,7 +43,7 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/davidbrochart/tscat-crdt"
+Homepage = "https://github.com/SciQLop/tscat-crdt"
 
 [tool.uv.build-backend]
 module-name = "tscat_crdt"
