@@ -94,3 +94,26 @@ def test_sync_both_ways():
     db1 = DB()
     db0.sync(db1)
     db1.sync(db0)
+
+
+def test_dump_load(tmp_path):
+    db0 = DB()
+    event = db0.create_event(EventModel(
+        start="2025-01-31",
+        stop="2026-01-31",
+        author="Paul",
+    ))
+    catalogue = db0.create_catalogue(CatalogueModel(
+        name="cat",
+        author="John",
+    ))
+    catalogue.add_events(event)
+    path0 = tmp_path / "db0.json"
+    path0.write_text(db0.to_json())
+
+    db1 = DB.from_json(path0.read_text())
+    assert db1.events == {event}
+    assert db1.catalogues == {catalogue}
+    path1 = tmp_path / "db1.json"
+    path1.write_text(db1.to_json())
+    assert path0.read_text() == path1.read_text()

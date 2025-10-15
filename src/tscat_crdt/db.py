@@ -1,3 +1,4 @@
+import json
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from functools import partial
@@ -36,6 +37,16 @@ class DB:
         self._event_create_callbacks: list[Callable[[Any], None]] = []
         self._event_change_callbacks: dict[str, dict[str, list[Callable[[Any], None]]]] = defaultdict(lambda: defaultdict(list))
         self._events: dict[str, Event] = {}
+
+    @classmethod
+    def from_json(cls, data: str) -> "DB":
+        db = DB()
+        db_dict = json.loads(data)
+        for item in db_dict["events"]:
+            db.create_event(EventModel(**item))
+        for item in db_dict["catalogues"]:
+            db.create_catalogue(CatalogueModel(**item))
+        return db
 
     @property
     def doc(self) -> Doc:
@@ -234,6 +245,15 @@ class DB:
 
         self._doc.observe(partial(send_update, db, self))
         db._doc.observe(partial(send_update, self, db))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "catalogues": [catalogue.to_dict() for catalogue in self.catalogues],
+            "events": [event.to_dict() for event in self.events],
+        }
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict())
 
 
 def send_update(destination: DB, source: DB, event: TransactionEvent) -> None:

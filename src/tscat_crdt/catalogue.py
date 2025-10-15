@@ -38,13 +38,7 @@ class Catalogue(Mixin):
             return self._uuid == other._uuid
 
     def __repr__(self) -> str:
-        with self._map.doc.transaction():
-            self._check_deleted()
-            dct = self._map.to_py()
-            assert dct is not None
-            dct["tags"] = list(dct["tags"].keys())
-            dct["events"] = list(dct["events"].keys())
-            return dumps(dct)
+        return dumps(self.to_dict())
 
     def __hash__(self) -> int:
         self._check_deleted()
@@ -102,6 +96,16 @@ class Catalogue(Mixin):
         self = cls(uuid, map, db)
         db._catalogues[uuid] = self
         return self
+
+    def to_dict(self) -> dict[str, Any]:
+        with self._map.doc.transaction():
+            self._check_deleted()
+            dct = self._map.to_py()
+            assert dct is not None
+            dct["tags"] = list(dct["tags"].keys())
+            dct["events"] = list(dct["events"].keys())
+            dct["attributes"] = dict(sorted(dct["attributes"].items()))
+            return dict(sorted(dct.items()))
 
     def on_change_name(self, callback: Callable[[Any], None]) -> None:
         self._on_change("name", callback)
