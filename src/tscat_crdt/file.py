@@ -3,7 +3,7 @@ from pathlib import Path
 from types import TracebackType
 
 import anyio
-from anyio import TASK_STATUS_IGNORED, create_task_group, open_file
+from anyio import CancelScope, TASK_STATUS_IGNORED, create_task_group, open_file
 from anyio.abc import TaskStatus
 from pycrdt import Decoder, Doc, write_message
 
@@ -43,4 +43,5 @@ class File:
             task_status.started()
             async for event in events:
                 message = write_message(event.update)
-                await self._file.write(message)
+                with CancelScope(shield=True):
+                    await self._file.write(message)

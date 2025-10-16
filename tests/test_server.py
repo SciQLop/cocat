@@ -33,11 +33,11 @@ async def test_websocket(free_tcp_port, tmp_path):
 
             with fail_after(1):
                 while True:
+                    await sleep(0.01)
                     if db1.events and db1.catalogues:
                         assert db1.events == {event0}
                         assert db1.catalogues == {catalogue}
                         break
-                    await sleep(0.01)
 
             async with db1.doc.transaction():
                 event1 = db1.create_event(EventModel(
@@ -50,11 +50,11 @@ async def test_websocket(free_tcp_port, tmp_path):
 
             with fail_after(1):
                 while True:
+                    await sleep(0.01)
                     if len(db0.events) > 1:
                         assert db0.events == {event0, event1}
-                        assert db1.catalogues == {catalogue}
+                        assert db0.catalogues == {catalogue}
                         break
-                    await sleep(0.01)
 
     db2 = DB()
 
@@ -63,8 +63,8 @@ async def test_websocket(free_tcp_port, tmp_path):
 
     with fail_after(1):
         while True:
+            await sleep(0.01)
             if len(db2.events) > 1:
                 assert db2.events == {event0, event1}
                 assert db2.catalogues == {catalogue}
                 break
-            await sleep(0.01)
