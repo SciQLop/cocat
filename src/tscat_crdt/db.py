@@ -22,8 +22,8 @@ from .models import CatalogueModel, EventModel
 
 
 class DB:
-    def __init__(self) -> None:
-        self._doc: Doc = Doc()
+    def __init__(self, doc: Doc | None = None) -> None:
+        self._doc: Doc = Doc() if doc is None else doc
         self._catalogue_maps = self._doc.get("catalogues", type=Map)
         self._event_maps = self._doc.get("events", type=Map)
         self._synced: list[DB] = []
@@ -39,8 +39,8 @@ class DB:
         self._events: dict[str, Event] = {}
 
     @classmethod
-    def from_json(cls, data: str) -> "DB":
-        db = DB()
+    def from_json(cls, data: str, doc: Doc | None = None) -> "DB":
+        db = DB(doc=doc)
         db_dict = json.loads(data)
         for item in db_dict["events"]:
             db.create_event(EventModel(**item))

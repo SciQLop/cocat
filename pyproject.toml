@@ -40,6 +40,9 @@ test = [
   "ruff",
   "pytest",
   "coverage",
+  "wiredb",
+  "wire_websocket",
+  "trio",
 ]
 
 [project.urls]
