@@ -13,8 +13,7 @@ async def test_websocket(free_tcp_port, tmp_path):
         async with (
             connect("websocket", host="http://localhost", port=free_tcp_port) as client0,
             connect("websocket", host="http://localhost", port=free_tcp_port) as client1,
-            connect("websocket", host="http://localhost", port=free_tcp_port) as client2,
-            File(update_path, client2.doc),
+            File(update_path, client0.doc),
         ):
             db0 = DB(doc=client0.doc)
             db1 = DB(doc=client1.doc)
