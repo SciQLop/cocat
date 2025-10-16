@@ -25,18 +25,18 @@ async def test_websocket(free_tcp_port, tmp_path):
                     stop="2026-01-31",
                     author="Paul",
                 ))
-                catalogue = db0.create_catalogue(CatalogueModel(
+                catalogue0 = db0.create_catalogue(CatalogueModel(
                     name="cat",
                     author="John",
                 ))
-                catalogue.add_events(event0)
+                catalogue0.add_events(event0)
 
             with fail_after(1):
                 while True:
                     await sleep(0.01)
                     if db1.events and db1.catalogues:
                         assert db1.events == {event0}
-                        assert db1.catalogues == {catalogue}
+                        assert db1.catalogues == {catalogue0}
                         break
 
             async with db1.doc.transaction():
@@ -45,7 +45,7 @@ async def test_websocket(free_tcp_port, tmp_path):
                     stop="2028-01-31",
                     author="Mike",
                 ))
-                catalogue1 = db1.get_catalogue(str(catalogue.uuid))
+                catalogue1 = db1.get_catalogue(str(catalogue0.uuid))
                 catalogue1.add_events(event1)
 
             with fail_after(1):
@@ -53,7 +53,7 @@ async def test_websocket(free_tcp_port, tmp_path):
                     await sleep(0.01)
                     if len(db0.events) > 1:
                         assert db0.events == {event0, event1}
-                        assert db0.catalogues == {catalogue}
+                        assert db0.catalogues == {catalogue1}
                         break
 
     db2 = DB()
@@ -66,5 +66,5 @@ async def test_websocket(free_tcp_port, tmp_path):
             await sleep(0.01)
             if len(db2.events) > 1:
                 assert db2.events == {event0, event1}
-                assert db2.catalogues == {catalogue}
+                assert db2.catalogues == {catalogue1}
                 break
