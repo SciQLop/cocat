@@ -56,14 +56,7 @@ async def test_websocket(free_tcp_port, tmp_path):
                         break
 
     db2 = DB()
-
     async with File(update_path, db2.doc):
         pass
-
-    with fail_after(1):
-        while True:
-            await sleep(0.01)
-            if len(db2.events) > 1:
-                assert db2.events == {event0, event1}
-                assert db2.catalogues == {catalogue1}
-                break
+    assert db2.events == {event0, event1}
+    assert db2.catalogues == {catalogue1}
