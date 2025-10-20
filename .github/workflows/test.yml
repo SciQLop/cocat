@@ -31,7 +31,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
 
-    - name: Install tscat-crdt
+    - name: Install cocat
       run: |
         pip install . --group test
 

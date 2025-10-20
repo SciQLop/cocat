@@ -1,6 +1,6 @@
 from pycrdt import Doc
 
-from tscat_crdt import DB, CatalogueModel, EventModel
+from cocat import DB, CatalogueModel, EventModel
 
 
 def test_create_catalogue():

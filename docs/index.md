@@ -1,0 +1,3 @@
+Cocat is a reimplementation of [tscat](https://github.com/SciQLop/tscat) using [CRDTs](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type), enabling real-time collaboration.
+
+Conflict-free Replicated Data Types (CRDTs) allow creating shared documents that can automatically merge changes made concurrently on different "copies" of the data. When the data lives on different machines, they make it possible to build distributed systems that work with local data, leaving the synchronization and conflict resolution with remote data to the CRDT algorithm, which ensures that all data replicas eventually converge to the same state.

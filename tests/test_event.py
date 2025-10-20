@@ -3,7 +3,7 @@ from json import loads
 
 import pytest
 
-from tscat_crdt import DB, EventModel
+from cocat import DB, EventModel
 
 
 def test_event():

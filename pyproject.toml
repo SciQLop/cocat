@@ -3,10 +3,11 @@ requires = ["uv_build"]
 build-backend = "uv_build"
 
 [project]
-name = "tscat-crdt"
-version = "0.0.0"
+name = "cocat"
+version = "0.1.0"
 description = "CRDT-based tscat"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
   { name = "David Brochart", email = "david.brochart@gmail.com" },
 ]
@@ -44,9 +45,14 @@ test = [
   "wire_websocket",
   "trio",
 ]
+docs = [
+  "mkdocs",
+  "mkdocs-material",
+  "mkdocstrings[python]",
+]
 
 [project.urls]
-Homepage = "https://github.com/SciQLop/tscat-crdt"
+Homepage = "https://github.com/SciQLop/cocat"
 
 [tool.uv.build-backend]
-module-name = "tscat_crdt"
+module-name = "cocat"

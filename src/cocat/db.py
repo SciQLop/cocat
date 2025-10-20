@@ -22,7 +22,16 @@ from .models import CatalogueModel, EventModel
 
 
 class DB:
+    """
+    A database which holds events and catalogues.
+    """
     def __init__(self, doc: Doc | None = None) -> None:
+        """
+        Creates a database.
+
+        Args:
+            doc: An optional [Doc](https://y-crdt.github.io/pycrdt/api_reference/#pycrdt.Doc).
+        """
         self._doc: Doc = Doc() if doc is None else doc
         self._catalogue_maps = self._doc.get("catalogues", type=Map)
         self._event_maps = self._doc.get("events", type=Map)
@@ -40,6 +49,16 @@ class DB:
 
     @classmethod
     def from_json(cls, data: str, doc: Doc | None = None) -> "DB":
+        """
+        Creates a database from a JSON string.
+
+        Args:
+            data: The JSON string.
+            doc: An optional [Doc](https://y-crdt.github.io/pycrdt/api_reference/#pycrdt.Doc).
+
+        Returns:
+            The created database.
+        """
         db = DB(doc=doc)
         db_dict = json.loads(data)
         for item in db_dict["events"]:
@@ -50,6 +69,10 @@ class DB:
 
     @property
     def doc(self) -> Doc:
+        """
+        Returns:
+            The database [Doc](https://y-crdt.github.io/pycrdt/api_reference/#pycrdt.Doc).
+        """
         return self._doc
 
     def _catalogues_changed(self, events: list[ArrayEvent | MapEvent]) -> None:
@@ -186,13 +209,31 @@ class DB:
 
     @property
     def catalogues(self) -> set[Catalogue]:
+        """
+        Returns:
+            The catalogues in the database.
+        """
         return {Catalogue.from_map(catalogue, self) for uuid, catalogue in self._catalogue_maps.items()}
 
     @property
     def events(self) -> set[Event]:
+        """
+        Returns:
+            The events in the database.
+        """
         return {Event.from_map(event, self) for uuid, event in self._event_maps.items()}
 
     def create_catalogue(self, model: CatalogueModel, events: Iterable[Event] | Event | None = None) -> Catalogue:
+        """
+        Creates a catalogue in the database.
+
+        Args:
+            model: The catalogue model.
+            events: The initial event(s) in the catalogue.
+
+        Returns:
+            The created [Catalogue][cocat.Catalogue].
+        """
         catalogue = Catalogue.new(model, self)
         with self._doc.transaction():
             self._catalogue_maps[str(model.uuid)] = catalogue._map
@@ -204,20 +245,55 @@ class DB:
         return catalogue
 
     def create_event(self, model: EventModel) -> Event:
+        """
+        Creates an event in the database.
+
+        Args:
+            model: The event model.
+
+        Returns:
+            The created [Event][cocat.Event].
+        """
         event = Event.new(model, self)
         self._event_maps[str(model.uuid)] = event._map
         return event
 
-    def on_create_catalogue(self, callback: Callable[[Any], None]) -> None:
+    def on_create_catalogue(self, callback: Callable[[Catalogue], None]) -> None:
+        """
+        Registers a callback to be called when a catalogue is created.
+
+        Args:
+            callback: The callback to call with the created catalogue.
+        """
         self._catalogue_create_callbacks.append(callback)
 
-    def on_create_event(self, callback: Callable[[Any], None]) -> None:
+    def on_create_event(self, callback: Callable[[Event], None]) -> None:
+        """
+        Registers a callback to be called when an event is created.
+
+        Args:
+            callback: The callback to call with the created event.
+        """
         self._event_create_callbacks.append(callback)
 
     def get_catalogue(self, uuid: str) -> Catalogue:
+        """
+        Args:
+            uuid: The UUID of the catalogue to get.
+
+        Returns:
+            The catalogue with the given UUID.
+        """
         return Catalogue.from_uuid(uuid, self)
 
     def get_event(self, uuid: str) -> Event:
+        """
+        Args:
+            uuid: The UUID of the event to get.
+
+        Returns:
+            The event with the given UUID.
+        """
         return Event.from_uuid(uuid, self)
 
     def _handle_sync_message(self, message: bytes, db: "DB", init: bool = False) -> None:
@@ -236,6 +312,12 @@ class DB:
                     raise
 
     def sync(self, db: "DB") -> None:
+        """
+        Keeps the database in sync with another database. Mostly used for tests.
+
+        Args:
+            db: The database to keep in sync with this one.
+        """
         if db in self._synced or self in db._synced:
             return
 
@@ -247,12 +329,20 @@ class DB:
         db._doc.observe(partial(send_update, self, db))
 
     def to_dict(self) -> dict[str, Any]:
+        """
+        Returns:
+            The database as a dictionary.
+        """
         return {
             "catalogues": [catalogue.to_dict() for catalogue in self.catalogues],
             "events": [event.to_dict() for event in self.events],
         }
 
     def to_json(self) -> str:
+        """
+        Returns:
+            The database as a JSON string.
+        """
         return json.dumps(self.to_dict())
 
 

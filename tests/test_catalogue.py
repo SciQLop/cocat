@@ -2,7 +2,7 @@ from json import loads
 
 import pytest
 
-from tscat_crdt import DB, CatalogueModel, EventModel
+from cocat import DB, CatalogueModel, EventModel
 
 
 def test_catalogue():

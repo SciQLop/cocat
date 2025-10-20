@@ -98,6 +98,10 @@ class Catalogue(Mixin):
         return self
 
     def to_dict(self) -> dict[str, Any]:
+        """
+        Returns:
+            The catalogue as a dictionary.
+        """
         with self._map.doc.transaction():
             self._check_deleted()
             dct = self._map.to_py()
@@ -107,29 +111,68 @@ class Catalogue(Mixin):
             dct["attributes"] = dict(sorted(dct["attributes"].items()))
             return dict(sorted(dct.items()))
 
-    def on_change_name(self, callback: Callable[[Any], None]) -> None:
+    def on_change_name(self, callback: Callable[[str], None]) -> None:
+        """
+        Registers a callback to be called when the catalogue name changes.
+
+        Args:
+            callback: The callback to call with the new name.
+        """
         self._on_change("name", callback)
 
     def on_change_author(self, callback: Callable[[Any], None]) -> None:
+        """
+        Registers a callback to be called when the catalogue author changes.
+
+        Args:
+            callback: The callback to call with the new author.
+        """
         self._on_change("author", callback)
 
     def on_delete(self, callback: Callable[[], None]) -> None:
+        """
+        Registers a callback to be called when the catalogue is removed from the database.
+
+        Args:
+            callback: The callback to call.
+        """
         with self._map.doc.transaction():
             self._check_deleted()
             self._db._catalogue_delete_callbacks[self._uuid].append(callback)
 
-    def delete(self):
+    def delete(self) -> None:
+        """
+        Removes the catalogue from the database.
+        """
         with self._map.doc.transaction():
             self._check_deleted()
             del self._db._catalogue_maps[self._uuid]
 
     def on_add_events(self, callback: Callable[[list[Event]], None]) -> None:
+        """
+        Registers a callback to be called when events are added to the catalogue.
+
+        Args:
+            callback: The callback to call with a list of added events.
+        """
         self._on_add("events", callback)
 
     def on_remove_events(self, callback: Callable[[list[str]], None]) -> None:
+        """
+        Registers a callback to be called when events are removed from the catalogue.
+
+        Args:
+            callback: The callback to call with a list of removed event UUIDs.
+        """
         self._on_remove("events", callback)
 
     def add_events(self, events: Iterable[Event] | Event) -> None:
+        """
+        Add event(s) to the catalogue.
+
+        Args:
+            events: The events to add to the catalogue.
+        """
         self._check_deleted()
         event_list = [events] if isinstance(events, Event) else events
         with self._map.doc.transaction():
@@ -138,6 +181,12 @@ class Catalogue(Mixin):
                 map[event._uuid] = True
 
     def remove_events(self, events: Iterable[Event] | Event) -> None:
+        """
+        Removes event(s) from the catalogue.
+
+        Args:
+            events: The events to remove from the catalogue.
+        """
         self._check_deleted()
         event_list = [events] if isinstance(events, Event) else events
         with self._map.doc.transaction():
@@ -147,14 +196,26 @@ class Catalogue(Mixin):
 
     @property
     def name(self) -> str:
+        """
+        Returns:
+            The name of the catalogue.
+        """
         return self._get("name")
 
     @name.setter
     def name(self, value: str) -> None:
+        """
+        Args:
+            value: The name of the catalogue to set.
+        """
         self._set("name", value)
 
     @property
     def events(self) -> set[Event]:
+        """
+        Returns:
+            The events in the catalogue.
+        """
         self._check_deleted()
         with self._map.doc.transaction():
             event_uuids = cast(Map, self._map["events"])
@@ -162,6 +223,10 @@ class Catalogue(Mixin):
 
     @events.setter
     def events(self, value: set[Event]) -> None:
+        """
+        Args:
+            value: The events to set in the catalogue.
+        """
         self._check_deleted()
         with self._map.doc.transaction():
             events = cast(Map, self._map["events"])

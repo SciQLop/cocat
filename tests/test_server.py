@@ -1,7 +1,7 @@
 import pytest
 from anyio import fail_after, sleep
 
-from tscat_crdt import DB, CatalogueModel, EventModel, File
+from cocat import DB, CatalogueModel, EventModel, File
 from wiredb import bind, connect
 
 
