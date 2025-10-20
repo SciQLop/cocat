@@ -55,6 +55,8 @@ async def test_websocket(free_tcp_port, tmp_path):
                         assert db0.catalogues == {catalogue1}
                         break
 
+            await sleep(0.1)
+
     db2 = DB()
     async with File(update_path, db2.doc):
         pass
