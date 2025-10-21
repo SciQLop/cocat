@@ -1,7 +1,7 @@
 import pytest
 from anyio import fail_after, sleep
 
-from cocat import DB, CatalogueModel, EventModel, File
+from cocat import DB, CatalogueModel, EventModel
 from wiredb import bind, connect
 
 
@@ -13,7 +13,7 @@ async def test_websocket(free_tcp_port, tmp_path):
         async with (
             connect("websocket", host="http://localhost", port=free_tcp_port) as client0,
             connect("websocket", host="http://localhost", port=free_tcp_port) as client1,
-            File(update_path, client0.doc),
+            connect("file", doc=client0.doc, path=update_path),
         ):
             db0 = DB(doc=client0.doc)
             db1 = DB(doc=client1.doc)
@@ -58,7 +58,7 @@ async def test_websocket(free_tcp_port, tmp_path):
             await sleep(0.1)
 
     db2 = DB()
-    async with File(update_path, db2.doc):
+    async with connect("file", doc=db2.doc, path=update_path):
         pass
     assert db2.events == {event0, event1}
     assert db2.catalogues == {catalogue1}
