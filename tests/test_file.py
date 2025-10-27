@@ -25,6 +25,9 @@ async def test_file_with_write_delay(tmp_path):
         for i in range(20):
             text += "."
             await sleep(0.01)
-        assert update_path.read_bytes() == b""
+        header = b"0.0.1\x00"
+        assert update_path.read_bytes() == header
         await sleep(0.2)
-        assert update_path.read_bytes() != b""
+        data = update_path.read_bytes()
+        assert data.startswith(header)
+        assert data != header
