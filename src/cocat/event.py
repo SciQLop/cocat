@@ -2,6 +2,7 @@ import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from json import dumps
 from typing import Any, TYPE_CHECKING
 
@@ -31,44 +32,44 @@ class Event(Mixin):
 
     def __eq__(self, other: Any) -> bool:
         self._check_deleted()
-        with self._map.doc.transaction():
-            if not isinstance(other, Event):
-                return NotImplemented
+        if not isinstance(other, Event):
+            return NotImplemented
 
-            return self._uuid == other._uuid
+        return self._uuid == other._uuid
 
     def __repr__(self) -> str:
         return dumps(self.to_dict())
 
     def __hash__(self) -> int:
-        self._check_deleted()
         return hash(self._uuid)
 
     def _get(self, name: str) -> Any:
-        self._check_deleted()
-        value = self._map[name]
-        model = EventModel.__pydantic_validator__.validate_assignment(EventModel.model_construct(), name, value)
-        return getattr(model, name)
+        with self._db.transaction():
+            self._check_deleted()
+            value = self._map[name]
+            model = EventModel.__pydantic_validator__.validate_assignment(EventModel.model_construct(), name, value)
+            return getattr(model, name)
 
     def _set(self, name: str, value: Any, func: Callable[[Any], Any] | None = None) -> None:
-        self._check_deleted()
-        model = EventModel.__pydantic_validator__.validate_assignment(EventModel.model_construct(), name, value)
-        val = getattr(model, name)
-        if func is not None:
-            val = func(val)
-        self._map[name] = val
+        with self._db.transaction():
+            self._check_deleted()
+            model = EventModel.__pydantic_validator__.validate_assignment(EventModel.model_construct(), name, value)
+            val = getattr(model, name)
+            if func is not None:
+                val = func(val)
+            self._map[name] = val
 
     def _on_change(self, name: str, callback: Callable[[Any], None]) -> None:
         self._check_deleted()
-        self._db._event_change_callbacks[self._uuid][name].append(callback)
+        self._db._event_change_callbacks[self._uuid][name].append(partial(self._callback, callback))
 
     def _on_add(self, field: str, callback: Callable[[Any], None]) -> None:
         self._check_deleted()
-        self._db._event_change_callbacks[self._uuid][f"add_{field}"].append(callback)
+        self._db._event_change_callbacks[self._uuid][f"add_{field}"].append(partial(self._callback, callback))
 
     def _on_remove(self, field: str, callback: Callable[[list[str]], None]) -> None:
         self._check_deleted()
-        self._db._event_change_callbacks[self._uuid][f"remove_{field}"].append(callback)
+        self._db._event_change_callbacks[self._uuid][f"remove_{field}"].append(partial(self._callback, callback))
 
     @classmethod
     def new(cls, model: EventModel, db: "DB") -> Self:
@@ -106,7 +107,7 @@ class Event(Mixin):
         Returns:
             The event as a dictionary.
         """
-        with self._map.doc.transaction():
+        with self._db.transaction():
             self._check_deleted()
             dct = self._map.to_py()
             assert dct is not None
@@ -158,15 +159,16 @@ class Event(Mixin):
         Args:
             callback: The callback to call.
         """
-        self._check_deleted()
-        self._db._event_delete_callbacks[self._uuid].append(callback)
+        with self._db.transaction():
+            self._check_deleted()
+            self._db._event_delete_callbacks[self._uuid].append(partial(self._callback, callback))
 
     def delete(self):
         """
         Removes the event from the database.
         """
-        self._check_deleted()
-        with self._map.doc.transaction():
+        with self._db.transaction():
+            self._check_deleted()
             del self._db._event_maps[self._uuid]
             for uuid, catalogue in self._db._catalogue_maps.items():
                 catalogue_events = catalogue["events"]

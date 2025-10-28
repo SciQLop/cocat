@@ -9,6 +9,7 @@ from pycrdt import (
     Doc,
     Map,
     MapEvent,
+    Transaction,
     TransactionEvent,
     YMessageType,
     create_sync_message,
@@ -37,15 +38,22 @@ class DB:
         self._event_maps = self._doc.get("events", type=Map)
         self._synced: list[DB] = []
         self._catalogue_maps.observe_deep(self._catalogues_changed)
-        self._catalogue_delete_callbacks: dict[str, list[Callable[[], None]]] = defaultdict(list)
-        self._catalogue_create_callbacks: list[Callable[[Any], None]] = []
-        self._catalogue_change_callbacks: dict[str, dict[str, list[Callable[[Any], None]]]] = defaultdict(lambda: defaultdict(list))
+        self._catalogue_delete_callbacks: dict[str, list[Callable[[Any], None]]] = defaultdict(list)
+        self._catalogue_create_callbacks: list[Callable[[Any, Any], None]] = []
+        self._catalogue_change_callbacks: dict[str, dict[str, list[Callable[[Any, Any], None]]]] = defaultdict(lambda: defaultdict(list))
         self._catalogues: dict[str, Catalogue] = {}
         self._event_maps.observe_deep(self._events_changed)
-        self._event_delete_callbacks: dict[str, list[Callable[[], None]]] = defaultdict(list)
-        self._event_create_callbacks: list[Callable[[Any], None]] = []
-        self._event_change_callbacks: dict[str, dict[str, list[Callable[[Any], None]]]] = defaultdict(lambda: defaultdict(list))
+        self._event_delete_callbacks: dict[str, list[Callable[[Any], None]]] = defaultdict(list)
+        self._event_create_callbacks: list[Callable[[Any, Any], None]] = []
+        self._event_change_callbacks: dict[str, dict[str, list[Callable[[Any, Any], None]]]] = defaultdict(lambda: defaultdict(list))
         self._events: dict[str, Event] = {}
+
+    def _callback(self, callback: Callable[..., None], origin: "DB" | None, *args: Any) -> None:
+        if origin is not self:
+            callback(*args)
+
+    def transaction(self) -> Transaction:
+        return self._doc.transaction(self)
 
     @classmethod
     def from_json(cls, data: str, doc: Doc | None = None) -> "DB":
@@ -60,12 +68,13 @@ class DB:
             The created database.
         """
         db = DB(doc=doc)
-        db_dict = json.loads(data)
-        for item in db_dict["events"]:
-            db.create_event(EventModel(**item))
-        for item in db_dict["catalogues"]:
-            db.create_catalogue(CatalogueModel(**item))
-        return db
+        with db.transaction():
+            db_dict = json.loads(data)
+            for item in db_dict["events"]:
+                db.create_event(EventModel(**item))
+            for item in db_dict["catalogues"]:
+                db.create_catalogue(CatalogueModel(**item))
+            return db
 
     @property
     def doc(self) -> Doc:
@@ -75,7 +84,7 @@ class DB:
         """
         return self._doc
 
-    def _catalogues_changed(self, events: list[ArrayEvent | MapEvent]) -> None:
+    def _catalogues_changed(self, events: list[ArrayEvent | MapEvent], transaction: Transaction) -> None:
         for event in events:
             path = event.path  # type: ignore[union-attr]
             if len(path) == 0:
@@ -86,7 +95,7 @@ class DB:
                     action = keys[uuid]["action"]
                     if action == "delete":
                         for delete_callback in self._catalogue_delete_callbacks[uuid]:
-                            delete_callback()
+                            delete_callback(transaction.origin)
                         if uuid in self._catalogues:
                             del self._catalogues[uuid]
                         del self._catalogue_delete_callbacks[uuid]
@@ -94,7 +103,7 @@ class DB:
                         del self._catalogue_change_callbacks[uuid]
                     elif action == "add":
                         for create_callback in self._catalogue_create_callbacks:
-                            create_callback(self.get_catalogue(uuid))
+                            create_callback(transaction.origin, self.get_catalogue(uuid))
             elif len(path) == 1:
                 # property of catalogue changed (not events)
                 assert isinstance(event, MapEvent)
@@ -106,7 +115,7 @@ class DB:
                         for callback in callbacks:
                             value = changed_keys[key]["newValue"]
                             model = CatalogueModel.__pydantic_validator__.validate_assignment(CatalogueModel.model_construct(), key, value)
-                            callback(getattr(model, key))
+                            callback(transaction.origin, getattr(model, key))
             elif len(path) == 2:
                 if path[1] == "events":
                     # catalogue events changed
@@ -127,12 +136,12 @@ class DB:
                         if removed_uuids:
                             callbacks = self._catalogue_change_callbacks[uuid]["remove_events"]
                             for callback in callbacks:
-                                callback(set(removed_uuids))
+                                callback(transaction.origin, set(removed_uuids))
                         if added_uuids:
                             result = {Event.from_map(self._event_maps[added_uuid], self) for added_uuid in added_uuids}
                             callbacks = self._catalogue_change_callbacks[uuid]["add_events"]
                             for callback in callbacks:
-                                callback(result)
+                                callback(transaction.origin, result)
                 else:
                     assert isinstance(event, MapEvent)
                     uuid, name = path
@@ -149,13 +158,13 @@ class DB:
                     if removed:
                         callbacks = self._catalogue_change_callbacks[uuid][f"remove_{name}"]
                         for callback in callbacks:
-                            callback(removed)
+                            callback(transaction.origin, removed)
                     if added:
                         callbacks = self._catalogue_change_callbacks[uuid][f"add_{name}"]
                         for callback in callbacks:
-                            callback(added)
+                            callback(transaction.origin, added)
 
-    def _events_changed(self, events: list[MapEvent]) -> None:
+    def _events_changed(self, events: list[MapEvent], transaction: Transaction) -> None:
         for event in events:
             path = event.path  # type: ignore[attr-defined]
             if len(path) == 0:
@@ -165,7 +174,7 @@ class DB:
                     action = keys[uuid]["action"]
                     if action == "delete":
                         for delete_callback in self._event_delete_callbacks[uuid]:
-                            delete_callback()
+                            delete_callback(transaction.origin)
                         if uuid in self._events:
                             del self._events[uuid]
                         del self._event_delete_callbacks[uuid]
@@ -173,7 +182,7 @@ class DB:
                         del self._event_change_callbacks[uuid]
                     elif action == "add":
                         for create_callback in self._event_create_callbacks:
-                            create_callback(self.get_event(uuid))
+                            create_callback(transaction.origin, self.get_event(uuid))
             elif len(path) == 1:
                 assert isinstance(event, MapEvent)
                 uuid = path[0]
@@ -184,7 +193,7 @@ class DB:
                         for callback in callbacks:
                             value = changed_keys[key]["newValue"]
                             model = EventModel.__pydantic_validator__.validate_assignment(EventModel.model_construct(), key, value)
-                            callback(getattr(model, key))
+                            callback(transaction.origin, getattr(model, key))
             elif len(path) == 2:
                 assert isinstance(event, MapEvent)
                 uuid, name = path
@@ -201,11 +210,11 @@ class DB:
                 if removed:
                     callbacks = self._event_change_callbacks[uuid][f"remove_{name}"]
                     for callback in callbacks:
-                        callback(removed)
+                        callback(transaction.origin, removed)
                 if added:
                     callbacks = self._event_change_callbacks[uuid][f"add_{name}"]
                     for callback in callbacks:
-                        callback(added)
+                        callback(transaction.origin, added)
 
     @property
     def catalogues(self) -> set[Catalogue]:
@@ -234,14 +243,15 @@ class DB:
         Returns:
             The created [Catalogue][cocat.Catalogue].
         """
-        catalogue = Catalogue.new(model, self)
-        with self._doc.transaction():
+        with self.transaction():
+            catalogue = Catalogue.new(model, self)
             self._catalogue_maps[str(model.uuid)] = catalogue._map
             if events is not None:
                 if isinstance(events, Event):
                     events = [events]
                 for event in events:
                    catalogue.add_events(event)
+
         return catalogue
 
     def create_event(self, model: EventModel) -> Event:
@@ -254,9 +264,10 @@ class DB:
         Returns:
             The created [Event][cocat.Event].
         """
-        event = Event.new(model, self)
-        self._event_maps[str(model.uuid)] = event._map
-        return event
+        with self.transaction():
+            event = Event.new(model, self)
+            self._event_maps[str(model.uuid)] = event._map
+            return event
 
     def on_create_catalogue(self, callback: Callable[[Catalogue], None]) -> None:
         """
@@ -265,7 +276,7 @@ class DB:
         Args:
             callback: The callback to call with the created catalogue.
         """
-        self._catalogue_create_callbacks.append(callback)
+        self._catalogue_create_callbacks.append(partial(self._callback, callback))
 
     def on_create_event(self, callback: Callable[[Event], None]) -> None:
         """
@@ -274,7 +285,7 @@ class DB:
         Args:
             callback: The callback to call with the created event.
         """
-        self._event_create_callbacks.append(callback)
+        self._event_create_callbacks.append(partial(self._callback, callback))
 
     def get_catalogue(self, uuid: str) -> Catalogue:
         """

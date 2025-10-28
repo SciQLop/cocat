@@ -18,7 +18,7 @@ async def test_websocket(free_tcp_port, tmp_path):
             db0 = DB(doc=client0.doc)
             db1 = DB(doc=client1.doc)
 
-            async with db0.doc.transaction():
+            async with db0.transaction():
                 event0 = db0.create_event(EventModel(
                     start="2025-01-31",
                     stop="2026-01-31",
@@ -38,7 +38,7 @@ async def test_websocket(free_tcp_port, tmp_path):
                         assert db1.catalogues == {catalogue0}
                         break
 
-            async with db1.doc.transaction():
+            async with db1.transaction():
                 event1 = db1.create_event(EventModel(
                     start="2027-01-31",
                     stop="2028-01-31",

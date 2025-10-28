@@ -1,51 +1,59 @@
 from collections.abc import Callable, Iterable
-from typing import Any, cast
+from typing import Any, TYPE_CHECKING, cast
 from uuid import UUID
 
 from pycrdt import Map
 
+if TYPE_CHECKING:
+    from .db import DB
+
 class Mixin:
     _uuid: str
     _map: Map
+    _db: DB
     _get: Callable[[str], Any]
     _set: Callable[[str, Any], None]
     _check_deleted: Callable[[], None]
     _on_add: Callable[[str, Callable[[Any], None]], None]
     _on_remove: Callable[[str, Callable[[list[str]], None]], None]
 
+    def _callback(self, callback: Callable[..., None], origin: Any, *args: Any) -> None:
+        if origin is not self:
+            callback(*args)
+
     def _get_from_map(self, field: str) -> dict[str, Any]:
-        self._check_deleted()
-        with self._map.doc.transaction():
+        with self._db.transaction():
+            self._check_deleted()
             map = cast(Map, self._map[field])
             res = map.to_py()
             assert res is not None
             return res
 
     def _set_in_map(self, field: str, value: dict[str, Any]) -> None:
-        self._check_deleted()
-        with self._map.doc.transaction():
+        with self._db.transaction():
+            self._check_deleted()
             map = cast(Map, self._map[field])
             map.clear()
             map.update(value)
 
     def _add_keys(self, field: str, keys: Iterable[str] | str) -> None:
-        self._check_deleted()
-        key_list = [keys] if isinstance(keys, str) else keys
-        with self._map.doc.transaction():
+        with self._db.transaction():
+            key_list = [keys] if isinstance(keys, str) else keys
+            self._check_deleted()
             map = cast(Map, self._map[field])
             for key in key_list:
                 map[key] = True
 
     def _add_items(self, field: str, items: dict[str, Any]) -> None:
-        self._check_deleted()
-        with self._map.doc.transaction():
+        with self._db.transaction():
+            self._check_deleted()
             map = cast(Map, self._map[field])
             map.update(items)
 
     def _remove_keys(self, field: str, keys: Iterable[str] | str) -> None:
-        self._check_deleted()
-        key_list = [keys] if isinstance(keys, str) else keys
-        with self._map.doc.transaction():
+        with self._db.transaction():
+            key_list = [keys] if isinstance(keys, str) else keys
+            self._check_deleted()
             map = cast(Map, self._map[field])
             for key in key_list:
                 del map[key]

@@ -1,6 +1,7 @@
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from functools import partial
 from json import dumps
 from typing import Any, TYPE_CHECKING, cast
 
@@ -31,42 +32,42 @@ class Catalogue(Mixin):
 
     def __eq__(self, other: Any) -> bool:
         self._check_deleted()
-        with self._map.doc.transaction():
-            if not isinstance(other, Catalogue):
-                return NotImplemented
+        if not isinstance(other, Catalogue):
+            return NotImplemented
 
-            return self._uuid == other._uuid
+        return self._uuid == other._uuid
 
     def __repr__(self) -> str:
         return dumps(self.to_dict())
 
     def __hash__(self) -> int:
-        self._check_deleted()
         return hash(self._uuid)
 
     def _get(self, name: str) -> Any:
-        self._check_deleted()
-        value = self._map[name]
-        model = CatalogueModel.__pydantic_validator__.validate_assignment(CatalogueModel.model_construct(), name, value)
-        return getattr(model, name)
+        with self._db.transaction():
+            self._check_deleted()
+            value = self._map[name]
+            model = CatalogueModel.__pydantic_validator__.validate_assignment(CatalogueModel.model_construct(), name, value)
+            return getattr(model, name)
 
     def _set(self, name: str, value: Any) -> None:
-        self._check_deleted()
-        model = CatalogueModel.__pydantic_validator__.validate_assignment(CatalogueModel.model_construct(), name, value)
-        val = getattr(model, name)
-        self._map[name] = val
+        with self._db.transaction():
+            self._check_deleted()
+            model = CatalogueModel.__pydantic_validator__.validate_assignment(CatalogueModel.model_construct(), name, value)
+            val = getattr(model, name)
+            self._map[name] = val
 
     def _on_change(self, name: str, callback: Callable[[Any], None]) -> None:
         self._check_deleted()
-        self._db._catalogue_change_callbacks[self._uuid][name].append(callback)
+        self._db._catalogue_change_callbacks[self._uuid][name].append(partial(self._callback, callback))
 
     def _on_add(self, field: str, callback: Callable[[Any], None]) -> None:
         self._check_deleted()
-        self._db._catalogue_change_callbacks[self._uuid][f"add_{field}"].append(callback)
+        self._db._catalogue_change_callbacks[self._uuid][f"add_{field}"].append(partial(self._callback, callback))
 
     def _on_remove(self, field: str, callback: Callable[[list[str]], None]) -> None:
         self._check_deleted()
-        self._db._catalogue_change_callbacks[self._uuid][f"remove_{field}"].append(callback)
+        self._db._catalogue_change_callbacks[self._uuid][f"remove_{field}"].append(partial(self._callback, callback))
 
     @classmethod
     def new(cls, model: CatalogueModel, db: "DB") -> Self:
@@ -102,7 +103,7 @@ class Catalogue(Mixin):
         Returns:
             The catalogue as a dictionary.
         """
-        with self._map.doc.transaction():
+        with self._db.transaction():
             self._check_deleted()
             dct = self._map.to_py()
             assert dct is not None
@@ -136,15 +137,15 @@ class Catalogue(Mixin):
         Args:
             callback: The callback to call.
         """
-        with self._map.doc.transaction():
+        with self._db.transaction():
             self._check_deleted()
-            self._db._catalogue_delete_callbacks[self._uuid].append(callback)
+            self._db._catalogue_delete_callbacks[self._uuid].append(partial(self._callback, callback))
 
     def delete(self) -> None:
         """
         Removes the catalogue from the database.
         """
-        with self._map.doc.transaction():
+        with self._db.transaction():
             self._check_deleted()
             del self._db._catalogue_maps[self._uuid]
 
@@ -173,9 +174,9 @@ class Catalogue(Mixin):
         Args:
             events: The events to add to the catalogue.
         """
-        self._check_deleted()
-        event_list = [events] if isinstance(events, Event) else events
-        with self._map.doc.transaction():
+        with self._db.transaction():
+            event_list = [events] if isinstance(events, Event) else events
+            self._check_deleted()
             map = cast(Map, self._map["events"])
             for event in event_list:
                 map[event._uuid] = True
@@ -187,9 +188,9 @@ class Catalogue(Mixin):
         Args:
             events: The events to remove from the catalogue.
         """
-        self._check_deleted()
-        event_list = [events] if isinstance(events, Event) else events
-        with self._map.doc.transaction():
+        with self._db.transaction():
+            event_list = [events] if isinstance(events, Event) else events
+            self._check_deleted()
             map = cast(Map, self._map["events"])
             for event in event_list:
                 del map[event._uuid]
@@ -216,8 +217,8 @@ class Catalogue(Mixin):
         Returns:
             The events in the catalogue.
         """
-        self._check_deleted()
-        with self._map.doc.transaction():
+        with self._db.transaction():
+            self._check_deleted()
             event_uuids = cast(Map, self._map["events"])
             return {Event.from_map(self._db._event_maps[uuid], self._db) for uuid, val in event_uuids.items()}
 
@@ -227,8 +228,8 @@ class Catalogue(Mixin):
         Args:
             value: The events to set in the catalogue.
         """
-        self._check_deleted()
-        with self._map.doc.transaction():
+        with self._db.transaction():
+            self._check_deleted()
             events = cast(Map, self._map["events"])
             events.clear()
             for event in value:
