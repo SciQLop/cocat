@@ -9,20 +9,20 @@ Cocat consists of the following objects:
 User A on one machine could start creating catalogues and events:
 
 ```py
-from cocat import DB, CatalogueModel, EventModel
+from cocat import DB
 
 db0 = DB()
-event0 = db0.create_event(EventModel(
+event0 = db0.create_event(
     start="2025-01-31",
     stop="2026-01-31",
     author="John",
     attributes={"foo": "bar"},
-))
-catalogue0 = db0.create_catalogue(CatalogueModel(
+)
+catalogue0 = db0.create_catalogue(
     name="cat0",
     author="Paul",
     attributes={"baz": 3}
-))
+)
 catalogue0.add_events(event0)
 ```
 

@@ -8,5 +8,3 @@
       - DB
       - Event
       - Catalogue
-      - EventModel
-      - CatalogueModel
