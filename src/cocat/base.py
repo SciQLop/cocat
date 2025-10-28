@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 class Mixin:
     _uuid: str
     _map: Map
-    _db: DB
+    _db: "DB"
     _get: Callable[[str], Any]
     _set: Callable[[str, Any], None]
     _check_deleted: Callable[[], None]
