@@ -1,7 +1,7 @@
 import pytest
 from anyio import fail_after, sleep
 
-from cocat import DB, CatalogueModel, EventModel
+from cocat import DB
 from wiredb import bind, connect
 
 
@@ -19,15 +19,15 @@ async def test_websocket(free_tcp_port, tmp_path):
             db1 = DB(doc=client1.doc)
 
             async with db0.transaction():
-                event0 = db0.create_event(EventModel(
+                event0 = db0.create_event(
                     start="2025-01-31",
                     stop="2026-01-31",
                     author="Paul",
-                ))
-                catalogue0 = db0.create_catalogue(CatalogueModel(
+                )
+                catalogue0 = db0.create_catalogue(
                     name="cat",
                     author="John",
-                ))
+                )
                 catalogue0.add_events(event0)
 
             with fail_after(1):
@@ -39,11 +39,11 @@ async def test_websocket(free_tcp_port, tmp_path):
                         break
 
             async with db1.transaction():
-                event1 = db1.create_event(EventModel(
+                event1 = db1.create_event(
                     start="2027-01-31",
                     stop="2028-01-31",
                     author="Mike",
-                ))
+                )
                 catalogue1 = db1.get_catalogue(str(catalogue0.uuid))
                 catalogue1.add_events(event1)
 

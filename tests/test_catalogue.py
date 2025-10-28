@@ -2,19 +2,13 @@ from json import loads
 
 import pytest
 
-from cocat import DB, CatalogueModel, EventModel
+from cocat import DB
 
 
 def test_catalogue():
     db0 = DB()
     db1 = DB()
     db1.sync(db0)
-
-    catalogue_model = CatalogueModel(
-        name="cat0",
-        author="John",
-        attributes={"foo": "bar"}
-    )
 
     catalogue1 = None
 
@@ -25,28 +19,29 @@ def test_catalogue():
     db0.on_create_catalogue(lambda: None)  # should not be called
     db1.on_create_catalogue(create_catalogue_callback)
 
-    catalogue0 = db0.create_catalogue(catalogue_model)
+    catalogue0 = db0.create_catalogue(
+        name="cat0",
+        author="John",
+        attributes={"foo": "bar"}
+    )
     assert catalogue1 is not catalogue0
     assert catalogue1 == catalogue0
 
-    event_model = EventModel(
+    event0 = db0.create_event(
         start="2025-01-31",
         stop="2026-01-31",
         author="John",
     )
-    event0 = db0.create_event(event_model)
     catalogue0.add_events(event0)
 
-    assert loads(repr(catalogue0)) == {
-        "uuid": str(catalogue_model.uuid),
-        "events": [str(event_model.uuid)],
+    assert loads(repr(catalogue1)) == {
+        "uuid": str(catalogue0.uuid),
+        "events": [str(event0.uuid)],
         "author": "John",
         "name": "cat0",
         "tags": [],
         "attributes": {"foo": "bar"},
     }
-
-    assert catalogue0.uuid == catalogue_model.uuid
 
     assert catalogue0.name == "cat0"
     catalogue0.name = "cat1"
@@ -88,11 +83,11 @@ def test_catalogue():
     assert set_attributes == [{"d": 2}, {"c": 3}]
     assert catalogue1.attributes == {"c": 3}
 
-    event1 = db0.create_event(EventModel(
+    event1 = db0.create_event(
         start="2027-01-31",
         stop="2028-01-31",
         author="Jeane",
-    ))
+    )
     assert catalogue1.events == {event0}
     catalogue0.events = {event1}
     assert catalogue1.events == {event1}
@@ -117,11 +112,11 @@ def test_catalogue():
     removed_events = []
     catalogue1.on_add_events(lambda events: added_events.append(events))
     catalogue1.on_remove_events(lambda events: removed_events.append(events))
-    event2 = db0.create_event(EventModel(
+    event2 = db0.create_event(
         start="2029-01-31",
         stop="2030-01-31",
         author="Mike",
-    ))
+    )
     catalogue0.events = {event0, event2}
     assert removed_events == [{str(event1.uuid)}]
     assert added_events == [{event0, event2}]

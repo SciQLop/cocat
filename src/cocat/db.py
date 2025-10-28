@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from collections.abc import Callable, Iterable
+from datetime import datetime
 from functools import partial
 from typing import Any
+from uuid import UUID
 
 from pycrdt import (
     ArrayEvent,
@@ -73,9 +75,10 @@ class DB:
         with db.transaction():
             db_dict = json.loads(data)
             for item in db_dict["events"]:
-                db.create_event(EventModel(**item))
+                db.create_event(**item)
             for item in db_dict["catalogues"]:
-                db.create_catalogue(CatalogueModel(**item))
+                events = [db.get_event(uuid) for uuid in item.pop("events", [])]
+                db.create_catalogue(events=events, **item)
             return db
 
     @property
@@ -234,7 +237,16 @@ class DB:
         """
         return {Event.from_map(event, self) for uuid, event in self._event_maps.items()}
 
-    def create_catalogue(self, model: CatalogueModel, events: Iterable[Event] | Event | None = None) -> Catalogue:
+    def create_catalogue(
+        self,
+        *,
+        name: str,
+        author: str,
+        uuid: UUID | str | bytes | bytearray | None = None,
+        tags: list[str] | None = None,
+        attributes: dict[str, Any] | None = None,
+        events: Iterable[Event] | Event | None = None,
+    ) -> Catalogue:
         """
         Creates a catalogue in the database.
 
@@ -246,17 +258,38 @@ class DB:
             The created [Catalogue][cocat.Catalogue].
         """
         with self.transaction():
+            kwargs: dict[str, Any] = {
+                "name": name,
+                "author": author,
+            }
+            if uuid is not None:
+                kwargs["uuid"] = uuid
+            if tags is not None:
+                kwargs["tags"] = tags
+            if attributes is not None:
+                kwargs["attributes"] = attributes
+            model = CatalogueModel(**kwargs)
             catalogue = Catalogue.new(model, self)
             self._catalogue_maps[str(model.uuid)] = catalogue._map
             if events is not None:
                 if isinstance(events, Event):
                     events = [events]
-                for event in events:
-                   catalogue.add_events(event)
+                catalogue.add_events(events)
 
         return catalogue
 
-    def create_event(self, model: EventModel) -> Event:
+    def create_event(
+        self,
+        *,
+        start: datetime | int | float | str,
+        stop: datetime | int | float | str,
+        author: str,
+        uuid: UUID | str | bytes | bytearray | None = None,
+        tags: list[str] | None = None,
+        products: list[str] | None = None,
+        rating: int | None = None,
+        attributes: dict[str, Any] | None = None,
+    ) -> Event:
         """
         Creates an event in the database.
 
@@ -267,6 +300,22 @@ class DB:
             The created [Event][cocat.Event].
         """
         with self.transaction():
+            kwargs: dict[str, Any] = {
+                "author": author,
+                "start": start,
+                "stop": stop,
+            }
+            if uuid is not None:
+                kwargs["uuid"] = uuid
+            if tags is not None:
+                kwargs["tags"] = tags
+            if attributes is not None:
+                kwargs["attributes"] = attributes
+            if products is not None:
+                kwargs["products"] = products
+            if rating is not None:
+                kwargs["rating"] = rating
+            model = EventModel(**kwargs)
             event = Event.new(model, self)
             self._event_maps[str(model.uuid)] = event._map
             return event

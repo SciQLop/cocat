@@ -3,20 +3,13 @@ from json import loads
 
 import pytest
 
-from cocat import DB, EventModel
+from cocat import DB
 
 
 def test_event():
     db0 = DB()
     db1 = DB()
     db1.sync(db0)
-
-    event_model = EventModel(
-        start="2025-01-31",
-        stop="2026-01-31",
-        author="John",
-        attributes={"foo": "bar"},
-    )
 
     event1 = None
 
@@ -27,21 +20,27 @@ def test_event():
     db0.on_create_event(lambda: None)  # should not be called
     db1.on_create_event(create_event_callback)
 
-    event0 = db0.create_event(event_model)
+    event0 = db0.create_event(
+        start="2025-01-31",
+        stop="2026-01-31",
+        author="John",
+        attributes={"foo": "bar"},
+        rating=3,
+    )
     assert event1 == event0
 
     assert loads(repr(event1)) == {
-        "uuid": str(event_model.uuid),
+        "uuid": str(event0.uuid),
         "author": "John",
         "products": [],
-        "rating": None,
+        "rating": 3,
         "start": "2025-01-31 00:00:00",
         "stop": "2026-01-31 00:00:00",
         "tags": [],
         "attributes": {"foo": "bar"},
     }
 
-    assert event1.uuid == event_model.uuid
+    assert event1.uuid == event0.uuid
 
     assert event1.start == datetime(2025, 1, 31, 0, 0)
     event0.start = "2025-01-30"
@@ -86,7 +85,7 @@ def test_event():
     event0.add_products("c")
     assert event1.products == {"b", "c"}
 
-    assert event1.rating is None
+    assert event1.rating == 3
     event0.rating = 2
     assert event1.rating == 2
 
