@@ -1,0 +1,55 @@
+import pytest
+
+from cocat import (
+    create_catalogue,
+    create_event,
+    get_catalogue,
+    get_event,
+    save_catalogue,
+    save_event,
+    set_config,
+)
+from wiredb import bind
+
+
+pytestmark = pytest.mark.anyio
+
+async def test_api(free_tcp_port, tmp_path, anyio_backend, server):
+    file_path = tmp_path / "updates.y"
+    set_config(host="http://localhost", port=free_tcp_port, file_path=file_path)
+
+    catalogue0 = create_catalogue(name="cat0", author="Paul")
+    catalogue1 = create_catalogue(name="cat1", author="Mike")
+
+    if anyio_backend == "trio":
+        with pytest.raises(RuntimeError, match="no running event loop"):
+            await get_catalogue("cat0")
+
+        return
+    else:
+        with pytest.raises(RuntimeError, match="No catalogue found with name or UUID: cat0"):
+            await get_catalogue("cat0")
+
+    await save_catalogue(catalogue0)
+    await save_catalogue("cat1")
+    assert catalogue0 == await get_catalogue("cat0")
+    assert catalogue1 == await get_catalogue("cat1")
+
+    event0 = create_event(
+        start="2025-01-31",
+        stop="2026-01-31",
+        author="John",
+    )
+    event1 = create_event(
+        start="2027-01-31",
+        stop="2028-01-31",
+        author="Alyson",
+    )
+
+    with pytest.raises(RuntimeError, match=f"No event found with UUID: {event0.uuid}"):
+        await get_event(event0.uuid)
+
+    await save_event(event0)
+    await save_event(event1.uuid)
+    assert event0 == await get_event(event0.uuid)
+    assert event1 == await get_event(event1.uuid)

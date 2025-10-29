@@ -3,3 +3,10 @@ from .catalogue import Catalogue as Catalogue
 from .event import Event as Event
 from .models import CatalogueModel as CatalogueModel
 from .models import EventModel as EventModel
+from .api import create_catalogue as create_catalogue
+from .api import create_event as create_event
+from .api import get_catalogue as get_catalogue
+from .api import get_event as get_event
+from .api import save_catalogue as save_catalogue
+from .api import save_event as save_event
+from .api import set_config as set_config

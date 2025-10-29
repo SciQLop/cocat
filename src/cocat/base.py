@@ -135,6 +135,14 @@ class Mixin:
         self._remove_keys("tags", keys)
 
     @property
+    def db(self) -> "DB":
+        """
+        Returns:
+            The [database][cocat.DB] it belongs to.
+        """
+        return self._db
+
+    @property
     def uuid(self) -> UUID:
         """
         Returns:

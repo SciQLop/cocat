@@ -251,7 +251,11 @@ class DB:
         Creates a catalogue in the database.
 
         Args:
-            model: The catalogue model.
+            name: The name of the catalogue.
+            author: The author of the catalogue.
+            uuid: The optional UUID of the catalogue.
+            tags: The optional tags of the catalogue.
+            attributes: The optional attributes of the catalogue.
             events: The initial event(s) in the catalogue.
 
         Returns:
@@ -294,7 +298,14 @@ class DB:
         Creates an event in the database.
 
         Args:
-            model: The event model.
+            start: The start date of the event.
+            stop: The stop date of the event.
+            author: The author of the event.
+            uuid: The optional UUID of the event.
+            tags: The optional tags of the event.
+            products: The optional products of the event.
+            rating: The optional rating of the event.
+            attributes: The optional attributes of the catalogue.
 
         Returns:
             The created [Event][cocat.Event].
@@ -338,15 +349,24 @@ class DB:
         """
         self._event_create_callbacks.append(partial(self._callback, callback))
 
-    def get_catalogue(self, uuid: str) -> Catalogue:
+    def get_catalogue(self, uuid_or_name: str) -> Catalogue:
         """
         Args:
-            uuid: The UUID of the catalogue to get.
+            uuid_or_name: The UUID of the catalogue to get, or its name.
 
         Returns:
-            The catalogue with the given UUID.
+            The catalogue with the given UUID or name.
         """
-        return Catalogue.from_uuid(uuid, self)
+        try:
+            catalogue = Catalogue.from_uuid(uuid_or_name, self)
+        except KeyError:
+            for uuid in self._catalogue_maps:
+                if self._catalogue_maps[uuid]["name"] == uuid_or_name:
+                    catalogue = Catalogue.from_uuid(uuid, self)
+                    break
+            else:
+                raise RuntimeError(f"No catalogue found with name or UUID: {uuid_or_name}")
+        return catalogue
 
     def get_event(self, uuid: str) -> Event:
         """
@@ -356,7 +376,10 @@ class DB:
         Returns:
             The event with the given UUID.
         """
-        return Event.from_uuid(uuid, self)
+        try:
+            return Event.from_uuid(uuid, self)
+        except KeyError:
+            raise RuntimeError(f"No event found with UUID: {uuid}")
 
     def _handle_sync_message(self, message: bytes, db: "DB", init: bool = False) -> None:
         if init:
