@@ -9,7 +9,6 @@ from cocat import (
     save_event,
     set_config,
 )
-from wiredb import bind
 
 
 pytestmark = pytest.mark.anyio
