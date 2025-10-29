@@ -4,7 +4,7 @@ import subprocess
 import time
 
 import pytest
-import requests
+import requests  # type: ignore[import-untyped]
 
 
 @pytest.fixture()
