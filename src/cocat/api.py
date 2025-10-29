@@ -97,6 +97,14 @@ SESSION = Session()
 
 
 def set_config(host: str, port: int, file_path: str) -> None:
+    """
+    Sets the configuration of the current session.
+
+    Args:
+        host: The host name of the database web server.
+        port: The port numner pf the database web server.
+        file_path: The path to the file where updates will be stored.
+    """
     SESSION.host = host
     SESSION.port = port
     SESSION.file_path = file_path
@@ -174,11 +182,26 @@ def create_event(
     )
 
 
-async def get_catalogue(uuid_or_name: UUID | str) -> Catalogue:
+async def load_catalogue(uuid_or_name: UUID | str) -> Catalogue:
+    """
+    Loads a catalogue from the server.
+
+    Args:
+        uuid_or_name: The UUID or the name of the catalogue to load.
+
+    Returns:
+        The loaded catalogue.
+    """
     return await SESSION.get_remote_catalogue(str(uuid_or_name))
 
 
 async def save_catalogue(catalogue: Catalogue | UUID | str) -> None:
+    """
+    Saves a catalogue in the server.
+
+    Args:
+        catalogue: The catalogue to save (or its UUID).
+    """
     if isinstance(catalogue, Catalogue):
         uuid_or_name = str(catalogue.uuid)
     else:
@@ -187,11 +210,26 @@ async def save_catalogue(catalogue: Catalogue | UUID | str) -> None:
     await SESSION.connect(catalogue.db.doc)
 
 
-async def get_event(uuid: UUID | str) -> Event:
+async def load_event(uuid: UUID | str) -> Event:
+    """
+    Loads a server from the server.
+
+    Args:
+        uuid: The UUID of the event to load.
+
+    Returns:
+        The loaded event.
+    """
     return await SESSION.get_remote_event(str(uuid))
 
 
 async def save_event(event: Event | UUID | str) -> None:
+    """
+    Saves an event in the server.
+
+    Args:
+        event: The event to save (or its UUID).
+    """
     if isinstance(event, Event):
         uuid = str(event.uuid)
     else:

@@ -67,3 +67,37 @@ async def main():
 
 run(main)
 ```
+
+### High-level API
+
+A higher-level API is also provided, which is more suitable to an interactive workflow that
+can be done in Jupyter or a Python REPL. Notice the top-level `await`, that work out-of-the-box
+in Jupyter, but a Python REPL would have to be launched with `python -m asyncio`.
+
+```py
+from cocat import (
+    create_catalogue,
+    create_event,
+    load_catalogue,
+    load_event,
+    save_catalogue,
+    save_event,
+    set_config,
+)
+
+set_config(host="http://localhost", port=8000, file_path="updates.y")
+
+catalogue0 = create_catalogue(name="cat0", author="Paul")
+await save_catalogue(catalogue0)
+
+catalogue1 = await load_catalogue("56c935a2-0109-49c0-b91d-dd5b2de8feef")
+
+event0 = create_event(
+    start="2025-01-31",
+    stop="2026-01-31",
+    author="John",
+)
+await save_event(event0)
+
+event1 = await load_event("497393db-7dd6-4d7b-9ff1-8a8155bfed54")
+```
