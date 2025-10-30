@@ -1,5 +1,7 @@
 ## Quickstart
 
+### User API
+
 Cocat consists of the following objects:
 
 - [DB][cocat.DB]: the object representing the database, which allows creating events and catalogues, modifying them and being notified of the changes.
@@ -24,6 +26,7 @@ catalogue0 = db0.create_catalogue(
     attributes={"baz": 3}
 )
 catalogue0.add_events(event0)
+event0.stop = "2026-01-30"
 ```
 
 Up to now their data is local, but they could share the database using a web server. Here is how such a web server can be set up:
@@ -70,9 +73,9 @@ run(main)
 
 ### High-level API
 
-A higher-level API is also provided, which is more suitable to an interactive workflow that
-can be done in Jupyter or a Python REPL. Notice the top-level `await`, that work out-of-the-box
-in Jupyter, but a Python REPL would have to be launched with `python -m asyncio`.
+A higher-level API is also provided, which is more suitable for an interactive workflow that
+can be done in Jupyter or a Python REPL. Notice the top-level `await`s, that work out-of-the-box
+in Jupyter, but not in a classic Python REPL. Instead, an async Python REPL would have to be used (`python -m asyncio`).
 
 ```py
 from cocat import (
@@ -101,3 +104,17 @@ await save_event(event0)
 
 event1 = await load_event("497393db-7dd6-4d7b-9ff1-8a8155bfed54")
 ```
+
+### CLI
+
+A command-line interface allows to launch a server:
+
+```bash
+cocat serve --host "127.0.0.1" --port 8000 --directory "update_dir"
+```
+
+The server will listen to `http://127.0.0.1:8000` and the updates will be stored
+in the `update_dir` directory, with one file per room. Rooms are identified with
+the path a client connects to. For instance, if a client connects to
+`http://127.0.0.1:8000/my_room`, then the room ID is `my_room` and the corresponding
+file path is `update_dir/my_room.y`.

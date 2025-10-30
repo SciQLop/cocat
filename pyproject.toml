@@ -33,6 +33,7 @@ dependencies = [
   "pycrdt >=0.12.40,<0.13.0",
   "pydantic >=2.12.0,<3.0.0",
   "typing_extensions >=4.15.0,<5.0.0; python_version<'3.11'",
+  "wiredb >=0.4.0,<0.5.0",
 ]
 
 [dependency-groups]
