@@ -5,7 +5,7 @@ Cocat can be installed through [PyPI](https://pypi.org) or [conda-forge](https:/
 Cocat has a server side and a client side. If you are a user, you just need to:
 
 ```bash
-pip install "cocat"
+pip install cocat
 ```
 
 But if you are setting up a server, then you need to add the `server` extra-dependency:
@@ -19,13 +19,22 @@ pip install "cocat[server]"
 We recommend using `micromamba` to manage `conda-forge` environments (see `micromamba`'s
 [installation instructions](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html)).
 First create an environment, here called `my_env`, and activate it:
+
 ```bash
 micromamba create -n my_env
 micromamba activate my_env
 ```
+
 Then install `cocat`.
+
 ```bash
 micromamba install cocat
+```
+
+If you need the server side:
+
+```bash
+micromamba install fastapi fastapi-users fastapi-users-db-sqlalchemy anycorn aiosqlite
 ```
 
 ## Development install
