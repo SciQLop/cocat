@@ -52,5 +52,5 @@ micromamba install pip
 ```
 Then install `cocat` in editable mode:
 ```bash
-pip install -e .
+pip install -e ".[server]" --group test
 ```

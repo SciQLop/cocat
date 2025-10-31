@@ -16,3 +16,4 @@
       - save_event
       - log_in
       - log_out
+      - set_config

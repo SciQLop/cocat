@@ -105,7 +105,7 @@ def set_config(*, host: str | None = None, port: int | None = None, file_path: s
 
     Args:
         host: The host name of the database web server.
-        port: The port numner pf the database web server.
+        port: The port number of the database web server.
         file_path: The path to the file where updates will be stored.
         room_id: The ID of the room to connect to.
     """
@@ -136,7 +136,7 @@ def log_in(username: str, password: str) -> None:
 
 def log_out() -> None:
     """
-    Log out from the server.
+    Log out of the server.
     """
     httpx.post(f"{SESSION.host}:{SESSION.port}/auth/jwt/logout", cookies=SESSION.cookies)
     SESSION.cookies = httpx.Cookies()
