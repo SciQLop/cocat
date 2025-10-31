@@ -63,7 +63,11 @@ async def test_api(tmp_path, anyio_backend, server, user):
     await save_event(event1.uuid)
     assert event0 == await load_event(event0.uuid)
     assert event1 == await load_event(event1.uuid)
+
     log_out()
+
+    with pytest.RaisesGroup(WebSocketUpgradeError):
+        await load_catalogue("cat2")
 
 
 async def test_login(tmp_path, server, anyio_backend):

@@ -15,3 +15,4 @@
       - save_catalogue
       - save_event
       - log_in
+      - log_out
