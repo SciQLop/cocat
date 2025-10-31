@@ -2,8 +2,16 @@ Cocat can be installed through [PyPI](https://pypi.org) or [conda-forge](https:/
 
 ## With `pip`
 
+Cocat has a server side and a client side. If you are a user, you just need to:
+
 ```bash
-pip install cocat
+pip install "cocat"
+```
+
+But if you are setting up a server, then you need to add the `server` extra-dependency:
+
+```bash
+pip install "cocat[server]"
 ```
 
 ## With `micromamba`
