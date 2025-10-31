@@ -138,7 +138,7 @@ def log_out() -> None:
     """
     Log out from the server.
     """
-    response = httpx.post(f"{SESSION.host}:{SESSION.port}/auth/jwt/logout", cookies=SESSION.cookies)
+    httpx.post(f"{SESSION.host}:{SESSION.port}/auth/jwt/logout", cookies=SESSION.cookies)
     SESSION.cookies = httpx.Cookies()
 
 
