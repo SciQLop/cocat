@@ -118,7 +118,7 @@ cocat create-user --email "paul@example.com" --password "my_password" --db-path 
 Then the server can be launched:
 
 ```bash
-cocat serve --host "127.0.0.1" --port 8000 --directory "update_dir" --db-path "users.db"
+cocat serve --host "127.0.0.1" --port 8000 --update-dir "update_dir" --db-path "users.db"
 ```
 
 The server will listen to `http://127.0.0.1:8000` and the updates will be stored
