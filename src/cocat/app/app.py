@@ -21,6 +21,8 @@ class CocatApp:
 
         self.app = app = FastAPI(lifespan=lifespan)
 
+        current_superuser = fastapi_users.current_user(active=True, superuser=True)
+
         app.include_router(
             fastapi_users.get_auth_router(auth_backend), prefix="/auth/jwt", tags=["auth"]
         )
@@ -28,6 +30,7 @@ class CocatApp:
             fastapi_users.get_register_router(UserRead, UserCreate),
             prefix="/auth",
             tags=["auth"],
+            dependencies=[Depends(current_superuser)]
         )
         app.include_router(
             fastapi_users.get_reset_password_router(),
