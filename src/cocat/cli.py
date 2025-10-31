@@ -1,14 +1,9 @@
 import contextlib
-from functools import partial
-from pathlib import Path
-from typing import Any
 
 from anycorn import Config, serve as anycorn_serve
-from anyio import Event, run, sleep_forever
-from anyio.abc import TaskStatus
+from anyio import Event, run
 from cyclopts import App
 from fastapi_users.exceptions import UserAlreadyExists
-from wiredb import Room, RoomManager, connect
 
 from .app.app import CocatApp
 from .app.db import create_db_and_tables, get_async_session, get_user_db
@@ -61,29 +56,13 @@ def create_user(
     run(_create_user, email, password, is_superuser, db_path)
 
 
-class StoredRoom(Room):
-    def __init__(self, directory: str, *args: Any, **kwargs: Any):
-        super().__init__(*args, **kwargs)
-        self._directory = directory
-
-    async def run(self, *args: Any, **kwargs: Any):
-        await self.task_group.start(self.connect_to_file)
-        await super().run(*args, **kwargs)
-
-    async def connect_to_file(self, *, task_status: TaskStatus[None]) -> None:
-        async with connect("file", doc=self.doc, path=f"{Path(self._directory) / self.id.lstrip('/')}.y"):
-            task_status.started()
-            await sleep_forever()
-
-
 async def _serve(host: str, port: int, update_dir: str, db_path: str):
     config = Config()
     config.bind = [f"{host}:{port}"]
     shutdown_event = Event()
     try:
-        async with RoomManager(partial(StoredRoom, update_dir)) as room_manager:
-            cocat_app = CocatApp(room_manager, db_path)
-            await anycorn_serve(cocat_app.app, config, shutdown_trigger=shutdown_event.wait, mode="asgi")  # type: ignore[arg-type]
+        cocat_app = CocatApp(update_dir, db_path)
+        await anycorn_serve(cocat_app.app, config, shutdown_trigger=shutdown_event.wait, mode="asgi")  # type: ignore[arg-type]
     except Exception:
         shutdown_event.set()
 

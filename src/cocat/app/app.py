@@ -1,23 +1,43 @@
 from contextlib import asynccontextmanager
-from typing import Annotated
+from functools import partial
+from pathlib import Path
+from typing import Annotated, Any
 
+from anyio import sleep_forever
+from anyio.abc import TaskStatus
 from fastapi import Cookie, Depends, FastAPI, WebSocket, WebSocketDisconnect, status
 from fastapi_users import BaseUserManager, models
 from pycrdt import Channel
-from wiredb import RoomManager
+from wiredb import Room, RoomManager, connect
 
 from .db import create_db_and_tables
 from .schemas import UserCreate, UserRead, UserUpdate
 from .users import auth_backend, fastapi_users, get_user_manager, get_jwt_strategy
 
 
+class StoredRoom(Room):
+    def __init__(self, directory: str, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self._directory = directory
+
+    async def run(self, *args: Any, **kwargs: Any):
+        await self.task_group.start(self.connect_to_file)
+        await super().run(*args, **kwargs)
+
+    async def connect_to_file(self, *, task_status: TaskStatus[None]) -> None:
+        async with connect("file", doc=self.doc, path=f"{Path(self._directory) / self.id.lstrip('/')}.y"):
+            task_status.started()
+            await sleep_forever()
+
+
 class CocatApp:
-    def __init__(self, room_manager: RoomManager, db_path: str = "./test.db") -> None:
+    def __init__(self, update_dir: str, db_path: str = "./test.db") -> None:
 
         @asynccontextmanager
         async def lifespan(app: FastAPI):
-            await create_db_and_tables(db_path)
-            yield
+            async with RoomManager(partial(StoredRoom, update_dir)) as self.room_manager:
+                await create_db_and_tables(db_path)
+                yield
 
         self.app = app = FastAPI(lifespan=lifespan)
 
@@ -58,7 +78,7 @@ class CocatApp:
 
             await websocket.accept()
             ywebsocket = YWebSocket(websocket, id)
-            room = await room_manager.get_room(ywebsocket.path)
+            room = await self.room_manager.get_room(ywebsocket.path)
             await room.serve(ywebsocket)
 
 
