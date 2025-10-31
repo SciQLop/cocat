@@ -14,3 +14,4 @@
       - load_event
       - save_catalogue
       - save_event
+      - log_in

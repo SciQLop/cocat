@@ -89,6 +89,7 @@ from cocat import (
 )
 
 set_config(host="http://localhost", port=8000, file_path="updates.y")
+log_in("paul@example.com", "my_password")
 
 catalogue0 = create_catalogue(name="cat0", author="Paul")
 await save_catalogue(catalogue0)
@@ -107,10 +108,17 @@ event1 = await load_event("497393db-7dd6-4d7b-9ff1-8a8155bfed54")
 
 ### CLI
 
-A command-line interface allows to launch a server:
+A command-line interface allows to launch a server and manage users.
+Because the server can only be accessed by authenticated users, one has to create users first:
+
+```py
+cocat create-user --email "paul@example.com" --password "my_password" --db-path "users.db"
+```
+
+Then the server can be launched:
 
 ```bash
-cocat serve --host "127.0.0.1" --port 8000 --directory "update_dir"
+cocat serve --host "127.0.0.1" --port 8000 --directory "update_dir" --db-path "users.db"
 ```
 
 The server will listen to `http://127.0.0.1:8000` and the updates will be stored

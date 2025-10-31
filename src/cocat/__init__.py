@@ -7,6 +7,8 @@ from .api import create_catalogue as create_catalogue
 from .api import create_event as create_event
 from .api import load_catalogue as load_catalogue
 from .api import load_event as load_event
+from .api import log_in as log_in
+from .api import log_out as log_out
 from .api import save_catalogue as save_catalogue
 from .api import save_event as save_event
 from .api import set_config as set_config

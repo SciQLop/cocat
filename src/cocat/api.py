@@ -3,6 +3,7 @@ from collections.abc import Iterable
 from typing import Any
 from uuid import UUID
 
+import httpx
 from anyio import Lock
 from cocat import DB, Catalogue, Event
 from pycrdt import Doc
@@ -10,17 +11,19 @@ from wiredb import connect
 
 
 class Session:
-    def __init__(self, host: str = "http://localhost", port: int = 8000, file_path: str = "updates.y"):
+    def __init__(self, host: str = "http://localhost", port: int = 8000, file_path: str = "updates.y", room_id: str = "room0"):
         self.catalogues: dict[str, Catalogue] = {}
         self.events: dict[str, Event] = {}
         self.host = host
         self.port = port
+        self.cookies = httpx.Cookies()
         self.file_path = file_path
+        self.room_id = room_id
         self.lock = Lock()
 
     async def connect(self, doc: Doc) -> None:
         async with self.lock:
-            async with connect("websocket", doc=doc, host=self.host, port=self.port) as self.client:
+            async with connect("websocket", id=f"room/{self.room_id}", doc=doc, host=self.host, port=self.port, cookies=self.cookies) as self.client:
                 async with connect("file", doc=doc, path=self.file_path) as self.file:
                     pass
 
@@ -96,7 +99,7 @@ class Session:
 SESSION = Session()
 
 
-def set_config(host: str, port: int, file_path: str) -> None:
+def set_config(*, host: str | None = None, port: int | None = None, file_path: str | None = None, room_id: str | None = None) -> None:
     """
     Sets the configuration of the current session.
 
@@ -104,10 +107,38 @@ def set_config(host: str, port: int, file_path: str) -> None:
         host: The host name of the database web server.
         port: The port numner pf the database web server.
         file_path: The path to the file where updates will be stored.
+        room_id: The ID of the room to connect to.
     """
-    SESSION.host = host
-    SESSION.port = port
-    SESSION.file_path = file_path
+    if host is not None:
+        SESSION.host = host
+    if port is not None:
+        SESSION.port = port
+    if file_path is not None:
+        SESSION.file_path = file_path
+    if room_id is not None:
+        SESSION.room_id = room_id
+
+
+def log_in(username: str, password: str) -> None:
+    """
+    Log into the server.
+
+    Args:
+        username: The username to use to log in.
+        password: The password to use to log in.
+    """
+    data = {"username": username, "password": password}
+    response = httpx.post(f"{SESSION.host}:{SESSION.port}/auth/jwt/login", data=data)
+    cookie = response.cookies.get("fastapiusersauth")
+    assert cookie is not None
+    SESSION.cookies.set("fastapiusersauth", cookie)
+
+
+def log_out() -> None:
+    """
+    Log out from the server.
+    """
+    httpx.post(f"{SESSION.host}:{SESSION.port}/auth/jwt/logout", cookies=SESSION.cookies)
 
 
 def create_catalogue(
@@ -212,7 +243,7 @@ async def save_catalogue(catalogue: Catalogue | UUID | str) -> None:
 
 async def load_event(uuid: UUID | str) -> Event:
     """
-    Loads a server from the server.
+    Loads an event from the server.
 
     Args:
         uuid: The UUID of the event to load.
