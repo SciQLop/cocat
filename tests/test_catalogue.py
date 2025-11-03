@@ -143,3 +143,39 @@ def test_catalogue():
     with pytest.raises(RuntimeError) as excinfo:
         catalogue0.name = "cat2"
     assert str(excinfo.value) == "Catalogue has been deleted"
+
+
+def test_dynamic_catalogue():
+    db = DB()
+
+    event0 = db.create_event(
+        start="2025-01-31",
+        stop="2026-01-31",
+        author="John",
+        attributes={"foo": "bar"},
+    )
+    event1 = db.create_event(
+        start="2025-01-30",
+        stop="2026-01-30",
+        author="Paul",
+    )
+
+    catalogue0 = db.create_catalogue(
+        name="cat0",
+        author="Steve",
+    )
+    catalogue0.add_events_where("start > datetime(2025, 1, 30) and stop <= datetime(2026, 1, 31)")
+    assert catalogue0.events == {event0}
+    catalogue0.add_events(event1)
+    assert catalogue0.events == {event0, event1}
+    assert catalogue0.static_events == {event1}
+    assert catalogue0.dynamic_events == {event0}
+
+    catalogue1 = db.create_catalogue(
+        name="cat1",
+        author="Steve",
+    )
+    catalogue1.add_events_where("'baz' in attributes.values()")
+    assert not catalogue1.events
+    catalogue1.add_events_where("'bar' in attributes.values()")
+    assert catalogue1.events == {event0}

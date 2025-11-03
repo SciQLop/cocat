@@ -1,11 +1,13 @@
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from datetime import datetime
 from functools import partial
 from json import dumps
 from typing import Any, TYPE_CHECKING, cast
 
 from pycrdt import Map
+from simpleeval import SimpleEval  # type: ignore[import-untyped]
 
 from .base import Mixin
 from .event import Event
@@ -167,7 +169,7 @@ class Catalogue(Mixin):
         """
         self._on_remove("events", callback)
 
-    def add_events(self, events: Iterable[Event] | Event) -> None:
+    def add_events(self, events: Iterable[Event] | Event, _static: bool = True) -> None:
         """
         Add event(s) to the catalogue.
 
@@ -179,7 +181,38 @@ class Catalogue(Mixin):
             self._check_deleted()
             map = cast(Map, self._map["events"])
             for event in event_list:
-                map[event._uuid] = True
+                map[event._uuid] = _static
+
+    def add_events_where(
+        self,
+        condition: str,
+    ) -> None:
+        """
+        Add events that match a given condition to the catalogue.
+        The added events are called "dynamic events".
+        The condition is an expression using the event attributes, for instance:
+        ```py
+        catalogue.add_events_where("start > datetime(2025, 1, 1) and stop <= datetime(2026, 1, 1)")
+        ```
+
+        Args:
+            condition: The condition an event needs to match to be added to the catalogue.
+        """
+        s = SimpleEval()
+        s.functions = {"datetime": datetime}
+        with self._db.transaction():
+            for event in self._db.events:
+                s.names = {
+                    "start": event.start,
+                    "stop": event.stop,
+                    "author": event.author,
+                    "tags": event.tags,
+                    "products": event.products,
+                    "rating": event.rating,
+                    "attributes": event.attributes,
+                }
+                if s.eval(condition):
+                    self.add_events(event, _static=False)
 
     def remove_events(self, events: Iterable[Event] | Event) -> None:
         """
@@ -211,16 +244,38 @@ class Catalogue(Mixin):
         """
         self._set("name", value)
 
+    def _get_events(self, static: bool) -> set[Event]:
+        with self._db.transaction():
+            self._check_deleted()
+            event_uuids = cast(Map, self._map["events"])
+            return {Event.from_map(self._db._event_maps[uuid], self._db) for uuid, val in event_uuids.items() if val == static}
+
+    @property
+    def static_events(self) -> set[Event]:
+        """
+        Returns:
+            The static events in the catalogue.
+        """
+        return self._get_events(True)
+
+    @property
+    def dynamic_events(self) -> set[Event]:
+        """
+        Returns:
+            The dynamic events in the catalogue.
+        """
+        return self._get_events(False)
+
     @property
     def events(self) -> set[Event]:
         """
         Returns:
-            The events in the catalogue.
+            All the events (static or dynamic) in the catalogue.
         """
         with self._db.transaction():
             self._check_deleted()
             event_uuids = cast(Map, self._map["events"])
-            return {Event.from_map(self._db._event_maps[uuid], self._db) for uuid, val in event_uuids.items()}
+            return {Event.from_map(self._db._event_maps[uuid], self._db) for uuid in event_uuids.keys()}
 
     @events.setter
     def events(self, value: set[Event]) -> None:

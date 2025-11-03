@@ -38,6 +38,7 @@ dependencies = [
   "wire-file >=0.5.0,<0.6.0",
   "wire-websocket >=0.5.0,<0.6.0",
   "httpx >=0.28.1,<0.29.0",
+  "simpleeval >=1.0.3,<2.0.0",
 ]
 
 [dependency-groups]

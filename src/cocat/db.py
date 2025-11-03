@@ -227,7 +227,7 @@ class DB:
         Returns:
             The catalogues in the database.
         """
-        return {Catalogue.from_map(catalogue, self) for uuid, catalogue in self._catalogue_maps.items()}
+        return {Catalogue.from_map(catalogue, self) for catalogue in self._catalogue_maps.values()}
 
     @property
     def events(self) -> set[Event]:
@@ -235,7 +235,7 @@ class DB:
         Returns:
             The events in the database.
         """
-        return {Event.from_map(event, self) for uuid, event in self._event_maps.items()}
+        return {Event.from_map(event, self) for event in self._event_maps.values()}
 
     def create_catalogue(
         self,
