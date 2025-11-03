@@ -164,32 +164,27 @@ def test_dynamic_catalogue():
         name="cat0",
         author="Steve",
     )
-    catalogue0.add_events_where("event.start > datetime(2025, 1, 30) and event.stop <= datetime(2026, 1, 31)")
-    assert catalogue0.events == {event0}
-    catalogue0.add_events(event1)
-    assert catalogue0.events == {event0, event1}
-    assert catalogue0.static_events == {event1}
+    catalogue0.set_dynamic_events("event.start > datetime(2025, 1, 30) and event.stop <= datetime(2026, 1, 31)")
     assert catalogue0.dynamic_events == {event0}
+    assert not catalogue0.events
 
     catalogue1 = db.create_catalogue(
         name="cat1",
         author="Steve",
     )
-    catalogue1.add_events_where("'baz' in event.attributes.values()")
-    assert not catalogue1.events
-    catalogue1.add_events_where("'bar' in event.attributes.values()")
-    assert catalogue1.events == {event0}
+    catalogue1.set_dynamic_events("'baz' in event.attributes.values()")
+    assert not catalogue1.dynamic_events
+    catalogue1.set_dynamic_events("'bar' in event.attributes.values()")
+    assert catalogue1.dynamic_events == {event0}
 
-    assert catalogue0.events == {event0, event1}
-    assert catalogue1.events == {event0}
+    catalogue0.add_events([event0, event1])
+    catalogue1.add_events(event0)
     catalogue2 = db.create_catalogue(
         name="cat2",
         author="Mike",
     )
-    assert event1 in catalogue0
-    assert event1 not in catalogue1
-    catalogue2.add_events_where("event in catalogue0 and event not in catalogue1")
-    assert catalogue2.events == {event1}
+    catalogue2.set_dynamic_events(f"event in catalogues('{catalogue0.uuid}') and event not in catalogues('{catalogue1.uuid}')")
+    assert catalogue2.dynamic_events == {event1}
 
-    with pytest.raises(RuntimeError, match='Unknown "catalogue3"'):
-        catalogue2.add_events_where("event not in catalogue3")
+    catalogue2.set_dynamic_events()
+    assert not catalogue2.dynamic_events

@@ -1,4 +1,3 @@
-import inspect
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -28,6 +27,7 @@ class Catalogue(Mixin):
     _uuid: str
     _map: Map
     _db: "DB"
+    _condition: str | None = None
 
     def _check_deleted(self):
         if self._uuid not in self._db._catalogue_maps:
@@ -173,7 +173,7 @@ class Catalogue(Mixin):
         """
         self._on_remove("events", callback)
 
-    def add_events(self, events: Iterable[Event] | Event, _static: bool = True) -> None:
+    def add_events(self, events: Iterable[Event] | Event) -> None:
         """
         Add event(s) to the catalogue.
 
@@ -185,49 +185,23 @@ class Catalogue(Mixin):
             self._check_deleted()
             map = cast(Map, self._map["events"])
             for event in event_list:
-                map[event._uuid] = _static
+                map[event._uuid] = True
 
-    def add_events_where(
+    def set_dynamic_events(
         self,
-        condition: str,
+        condition: str | None = None,
     ) -> None:
         """
-        Add events that match a given condition to the catalogue.
-        The added events are called "dynamic events".
+        Sets a condition that will be evaluated when accessing `catalogue.dynamic_events`.
         The condition is an expression using the event attributes and/or references to other catalogues, for instance:
         ```py
-        catalogue.add_events_where("event.start > datetime(2025, 1, 1) and event.stop <= datetime(2026, 1, 1) and event in other_catalogue")
+        catalogue.set_dynamic_events(f"event.start > datetime(2025, 1, 1) and event.stop <= datetime(2026, 1, 1) and event in catalogues('{other_catalogue.uuid}')")
         ```
 
         Args:
-            condition: The condition an event needs to match to be added to the catalogue.
+            condition: The condition an event needs to match to be part of the catalogue.
         """
-        s = SimpleEval()
-        s.functions = {"datetime": datetime}
-        frame = inspect.currentframe()
-        assert frame is not None
-        outer_frame = frame.f_back
-        assert outer_frame is not None
-        outer_locals = outer_frame.f_locals
-
-        def name_handler(node):
-            name = node.id
-            if name == "event":
-                return event
-
-            if name in outer_locals:
-                res = outer_locals[name]
-                if isinstance(res, Catalogue):
-                    return res
-
-            raise RuntimeError(f'Unknown "{name}"')
-
-
-        with self._db.transaction():
-            for event in self._db.events:
-                s.names = name_handler
-                if s.eval(condition):
-                    self.add_events(event, _static=False)
+        self._condition = condition
 
     def remove_events(self, events: Iterable[Event] | Event) -> None:
         """
@@ -259,33 +233,31 @@ class Catalogue(Mixin):
         """
         self._set("name", value)
 
-    def _get_events(self, static: bool) -> set[Event]:
-        with self._db.transaction():
-            self._check_deleted()
-            event_uuids = cast(Map, self._map["events"])
-            return {Event.from_map(self._db._event_maps[uuid], self._db) for uuid, val in event_uuids.items() if val == static}
-
-    @property
-    def static_events(self) -> set[Event]:
-        """
-        Returns:
-            The static events in the catalogue.
-        """
-        return self._get_events(True)
-
     @property
     def dynamic_events(self) -> set[Event]:
         """
         Returns:
-            The dynamic events in the catalogue.
+            The dynamic events in the catalogue, as defined by `catalogue.set_dynamic_events(condition)`.
         """
-        return self._get_events(False)
+        if not self._condition:
+            return set()
+
+        s = SimpleEval()
+        s.functions = {"datetime": datetime, "catalogues": self._db.get_catalogue}
+        events = set()
+        with self._db.transaction():
+            for event in self._db.events:
+                s.names = {"event": event}
+                if s.eval(self._condition):
+                    events.add(event)
+
+        return events
 
     @property
     def events(self) -> set[Event]:
         """
         Returns:
-            All the events (static or dynamic) in the catalogue.
+            The (static) events in the catalogue.
         """
         with self._db.transaction():
             self._check_deleted()
