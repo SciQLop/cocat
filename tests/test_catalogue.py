@@ -164,7 +164,7 @@ def test_dynamic_catalogue():
         name="cat0",
         author="Steve",
     )
-    catalogue0.set_dynamic_events("event.start > datetime(2025, 1, 30) and event.stop <= datetime(2026, 1, 31)")
+    catalogue0.set_dynamic_filter("event.start > datetime(2025, 1, 30) and event.stop <= datetime(2026, 1, 31)")
     assert catalogue0.dynamic_events == {event0}
     assert not catalogue0.events
 
@@ -172,10 +172,14 @@ def test_dynamic_catalogue():
         name="cat1",
         author="Steve",
     )
-    catalogue1.set_dynamic_events("'baz' in event.attributes.values()")
+    catalogue1.set_dynamic_filter("'baz' in event.attributes.values()")
     assert not catalogue1.dynamic_events
-    catalogue1.set_dynamic_events("'bar' in event.attributes.values()")
+    assert not catalogue1.events
+    assert not catalogue1.all_events
+    catalogue1.set_dynamic_filter("'bar' in event.attributes.values()")
     assert catalogue1.dynamic_events == {event0}
+    assert not catalogue1.events
+    assert catalogue1.all_events == {event0}
 
     catalogue0.add_events([event0, event1])
     catalogue1.add_events(event0)
@@ -183,8 +187,8 @@ def test_dynamic_catalogue():
         name="cat2",
         author="Mike",
     )
-    catalogue2.set_dynamic_events(f"event in catalogues('{catalogue0.uuid}') and event not in catalogues('{catalogue1.uuid}')")
+    catalogue2.set_dynamic_filter("event in catalogue('cat0') and event not in catalogue('cat1')")
     assert catalogue2.dynamic_events == {event1}
 
-    catalogue2.set_dynamic_events()
+    catalogue2.set_dynamic_filter()
     assert not catalogue2.dynamic_events

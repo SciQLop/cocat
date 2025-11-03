@@ -187,7 +187,7 @@ class Catalogue(Mixin):
             for event in event_list:
                 map[event._uuid] = True
 
-    def set_dynamic_events(
+    def set_dynamic_filter(
         self,
         condition: str | None = None,
     ) -> None:
@@ -195,7 +195,7 @@ class Catalogue(Mixin):
         Sets a condition that will be evaluated when accessing `catalogue.dynamic_events`.
         The condition is an expression using the event attributes and/or references to other catalogues, for instance:
         ```py
-        catalogue.set_dynamic_events(f"event.start > datetime(2025, 1, 1) and event.stop <= datetime(2026, 1, 1) and event in catalogues('{other_catalogue.uuid}')")
+        catalogue.set_dynamic_filter(f"event.start > datetime(2025, 1, 1) and event.stop <= datetime(2026, 1, 1) and event in catalogue('my_catalogue_name_or_uuid')")
         ```
 
         Args:
@@ -237,13 +237,13 @@ class Catalogue(Mixin):
     def dynamic_events(self) -> set[Event]:
         """
         Returns:
-            The dynamic events in the catalogue, as defined by `catalogue.set_dynamic_events(condition)`.
+            The dynamic events in the catalogue, as defined by `catalogue.set_dynamic_filter(condition)`.
         """
         if not self._condition:
             return set()
 
         s = SimpleEval()
-        s.functions = {"datetime": datetime, "catalogues": self._db.get_catalogue}
+        s.functions = {"datetime": datetime, "catalogue": self._db.get_catalogue}
         events = set()
         with self._db.transaction():
             for event in self._db.events:
@@ -252,6 +252,14 @@ class Catalogue(Mixin):
                     events.add(event)
 
         return events
+
+    @property
+    def all_events(self) -> set[Event]:
+        """
+        Returns:
+            The (static and dynamic) events in the catalogue.
+        """
+        return self.events.union(self.dynamic_events)
 
     @property
     def events(self) -> set[Event]:
