@@ -196,7 +196,7 @@ class Catalogue(Mixin):
         The added events are called "dynamic events".
         The condition is an expression using the event attributes and/or references to other catalogues, for instance:
         ```py
-        catalogue.add_events_where("event.start > datetime(2025, 1, 1) and event.stop <= datetime(2026, 1, 1)" and event in other_catalogue)
+        catalogue.add_events_where("event.start > datetime(2025, 1, 1) and event.stop <= datetime(2026, 1, 1) and event in other_catalogue")
         ```
 
         Args:
