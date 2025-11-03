@@ -164,7 +164,7 @@ def test_dynamic_catalogue():
         name="cat0",
         author="Steve",
     )
-    catalogue0.add_events_where("start > datetime(2025, 1, 30) and stop <= datetime(2026, 1, 31)")
+    catalogue0.add_events_where("event.start > datetime(2025, 1, 30) and event.stop <= datetime(2026, 1, 31)")
     assert catalogue0.events == {event0}
     catalogue0.add_events(event1)
     assert catalogue0.events == {event0, event1}
@@ -175,7 +175,21 @@ def test_dynamic_catalogue():
         name="cat1",
         author="Steve",
     )
-    catalogue1.add_events_where("'baz' in attributes.values()")
+    catalogue1.add_events_where("'baz' in event.attributes.values()")
     assert not catalogue1.events
-    catalogue1.add_events_where("'bar' in attributes.values()")
+    catalogue1.add_events_where("'bar' in event.attributes.values()")
     assert catalogue1.events == {event0}
+
+    assert catalogue0.events == {event0, event1}
+    assert catalogue1.events == {event0}
+    catalogue2 = db.create_catalogue(
+        name="cat2",
+        author="Mike",
+    )
+    assert event1 in catalogue0
+    assert event1 not in catalogue1
+    catalogue2.add_events_where("event in catalogue0 and event not in catalogue1")
+    assert catalogue2.events == {event1}
+
+    with pytest.raises(RuntimeError, match='Unknown "catalogue3"'):
+        catalogue2.add_events_where("event not in catalogue3")

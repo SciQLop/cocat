@@ -1,3 +1,4 @@
+import inspect
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -44,6 +45,9 @@ class Catalogue(Mixin):
 
     def __hash__(self) -> int:
         return hash(self._uuid)
+
+    def __contains__(self, event: Event) -> bool:
+        return str(event.uuid) in self._map["events"]
 
     def _get(self, name: str) -> Any:
         with self._db.transaction():
@@ -190,9 +194,9 @@ class Catalogue(Mixin):
         """
         Add events that match a given condition to the catalogue.
         The added events are called "dynamic events".
-        The condition is an expression using the event attributes, for instance:
+        The condition is an expression using the event attributes and/or references to other catalogues, for instance:
         ```py
-        catalogue.add_events_where("start > datetime(2025, 1, 1) and stop <= datetime(2026, 1, 1)")
+        catalogue.add_events_where("event.start > datetime(2025, 1, 1) and event.stop <= datetime(2026, 1, 1)" and event in other_catalogue)
         ```
 
         Args:
@@ -200,17 +204,28 @@ class Catalogue(Mixin):
         """
         s = SimpleEval()
         s.functions = {"datetime": datetime}
+        frame = inspect.currentframe()
+        assert frame is not None
+        outer_frame = frame.f_back
+        assert outer_frame is not None
+        outer_locals = outer_frame.f_locals
+
+        def name_handler(node):
+            name = node.id
+            if name == "event":
+                return event
+
+            if name in outer_locals:
+                res = outer_locals[name]
+                if isinstance(res, Catalogue):
+                    return res
+
+            raise RuntimeError(f'Unknown "{name}"')
+
+
         with self._db.transaction():
             for event in self._db.events:
-                s.names = {
-                    "start": event.start,
-                    "stop": event.stop,
-                    "author": event.author,
-                    "tags": event.tags,
-                    "products": event.products,
-                    "rating": event.rating,
-                    "attributes": event.attributes,
-                }
+                s.names = name_handler
                 if s.eval(condition):
                     self.add_events(event, _static=False)
 
