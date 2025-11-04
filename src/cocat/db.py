@@ -60,6 +60,27 @@ class DB:
         return self._doc.transaction(self)
 
     @classmethod
+    def from_dict(cls, db_dict: dict[str, Any], doc: Doc | None = None) -> "DB":
+        """
+        Creates a database from a dictionary.
+
+        Args:
+            db_dict: The dictionary.
+            doc: An optional [Doc](https://y-crdt.github.io/pycrdt/api_reference/#pycrdt.Doc).
+
+        Returns:
+            The created database.
+        """
+        db = DB(doc=doc)
+        with db.transaction():
+            for item in db_dict["events"]:
+                db.create_event(**item)
+            for item in db_dict["catalogues"]:
+                events = [db.get_event(uuid) for uuid in item.pop("events", [])]
+                db.create_catalogue(events=events, **item)
+            return db
+
+    @classmethod
     def from_json(cls, data: str, doc: Doc | None = None) -> "DB":
         """
         Creates a database from a JSON string.
@@ -71,15 +92,7 @@ class DB:
         Returns:
             The created database.
         """
-        db = DB(doc=doc)
-        with db.transaction():
-            db_dict = json.loads(data)
-            for item in db_dict["events"]:
-                db.create_event(**item)
-            for item in db_dict["catalogues"]:
-                events = [db.get_event(uuid) for uuid in item.pop("events", [])]
-                db.create_catalogue(events=events, **item)
-            return db
+        return DB.from_dict(json.loads(data))
 
     @property
     def doc(self) -> Doc:

@@ -49,6 +49,7 @@ test = [
   "coverage",
   "trio",
   "requests",
+  "astropy",
 ]
 docs = [
   "mkdocs",
