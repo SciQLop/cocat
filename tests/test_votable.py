@@ -1,9 +1,12 @@
 import re
+from pathlib import Path
 
 import pytest
 
 from cocat import DB
 from cocat.votable import export_votable_file, export_votable_str, import_votable_file, import_votable_str
+
+HERE = Path(__file__).parent
 
 
 def test_export_different_attributes():
@@ -121,3 +124,15 @@ def test_export_import(tmp_path):
     assert db.events == {event0, event1}
     assert len(db.catalogues) == 1
     assert list(db.catalogues)[0].name == catalogue.name
+
+
+def test_import_file():
+    table = HERE / "data" / "Dst_Li2020.xml"
+    db = import_votable_file(table)
+
+    assert len(db.catalogues) == 1
+    catalogue = list(db.catalogues)[0]
+    assert catalogue.name == "Dst_Li2020"
+    assert len(db.events) == 95
+    assert len(catalogue.events) == 95
+    assert len([event for event in catalogue.events if event.author == "vincent.genot@irap.omp.eu"]) == 95

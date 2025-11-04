@@ -243,7 +243,7 @@ def import_votable(votable: VOTableFile, table_name: str | None = None) -> DB:
     return DB.from_dict(db_dict)
 
 
-def import_votable_file(file_path: str, table_name: str | None = None) -> DB:
+def import_votable_file(file_path: str | Path, table_name: str | None = None) -> DB:
     return import_votable(parse(file_path), table_name=table_name)
 
 
