@@ -20,10 +20,9 @@ def test_catalogue():
     db1.on_create_catalogue(create_catalogue_callback)
 
     catalogue0 = db0.create_catalogue(
-        name="cat0",
-        author="John",
-        attributes={"foo": "bar"}
+        name="cat0", author="John", attributes={"foo": "bar"}
     )
+    assert catalogue0.db is db0
     assert catalogue1 is not catalogue0
     assert catalogue1 == catalogue0
 
@@ -164,7 +163,9 @@ def test_dynamic_catalogue():
         name="cat0",
         author="Steve",
     )
-    catalogue0.set_dynamic_filter("event.start > datetime(2025, 1, 30) and event.stop <= datetime(2026, 1, 31)")
+    catalogue0.set_dynamic_filter(
+        "event.start > datetime(2025, 1, 30) and event.stop <= datetime(2026, 1, 31)"
+    )
     assert catalogue0.dynamic_events == {event0}
     assert not catalogue0.events
 
@@ -187,7 +188,9 @@ def test_dynamic_catalogue():
         name="cat2",
         author="Mike",
     )
-    catalogue2.set_dynamic_filter("event in catalogue('cat0') and event not in catalogue('cat1')")
+    catalogue2.set_dynamic_filter(
+        "event in catalogue('cat0') and event not in catalogue('cat1')"
+    )
     assert catalogue2.dynamic_events == {event1}
 
     catalogue2.set_dynamic_filter()

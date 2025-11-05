@@ -1,6 +1,7 @@
 import contextlib
 
-from anycorn import Config, serve as anycorn_serve
+from anycorn import Config
+from anycorn import serve as anycorn_serve
 from anyio import Event, run
 from cyclopts import App
 from fastapi_users.exceptions import UserAlreadyExists
@@ -15,6 +16,7 @@ get_user_db_context = contextlib.asynccontextmanager(get_user_db)
 get_user_manager_context = contextlib.asynccontextmanager(get_user_manager)
 
 app = App()
+
 
 @app.command
 def serve(
@@ -62,12 +64,16 @@ async def _serve(host: str, port: int, update_dir: str, db_path: str):
     shutdown_event = Event()
     try:
         cocat_app = CocatApp(update_dir, db_path)
-        await anycorn_serve(cocat_app.app, config, shutdown_trigger=shutdown_event.wait, mode="asgi")  # type: ignore[arg-type]
+        await anycorn_serve(
+            cocat_app.app, config, shutdown_trigger=shutdown_event.wait, mode="asgi"
+        )  # type: ignore[arg-type]
     except Exception:
         shutdown_event.set()
 
 
-async def _create_user(email: str, password: str, is_superuser: bool = False, db_path = "./test.db"):
+async def _create_user(
+    email: str, password: str, is_superuser: bool = False, db_path="./test.db"
+):
     await create_db_and_tables(db_path)
 
     try:

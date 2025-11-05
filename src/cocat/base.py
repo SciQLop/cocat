@@ -1,11 +1,12 @@
 from collections.abc import Callable, Iterable
-from typing import Any, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from pycrdt import Map
 
 if TYPE_CHECKING:
     from .db import DB
+
 
 class Mixin:
     _uuid: str

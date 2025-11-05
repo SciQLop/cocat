@@ -27,12 +27,16 @@ def user(db_path: str):
     command = [
         "cocat",
         "create-user",
-        "--email", email,
-        "--password", password,
-        "--db_path", db_path,
+        "--email",
+        email,
+        "--password",
+        password,
+        "--db_path",
+        db_path,
     ]
     subprocess.check_call(command)
     yield email, password
+
 
 @pytest.fixture()
 def server(free_tcp_port: int, update_dir: str, db_path: str):
@@ -40,10 +44,14 @@ def server(free_tcp_port: int, update_dir: str, db_path: str):
     command = [
         "cocat",
         "serve",
-        "--host", host,
-        "--port", str(free_tcp_port),
-        "--update_dir", update_dir,
-        "--db_path", db_path,
+        "--host",
+        host,
+        "--port",
+        str(free_tcp_port),
+        "--update_dir",
+        update_dir,
+        "--db_path",
+        db_path,
     ]
     p = subprocess.Popen(command)
     url = f"http://{host}:{free_tcp_port}"

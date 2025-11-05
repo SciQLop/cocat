@@ -30,6 +30,7 @@ class DB:
     """
     A database which holds events and catalogues.
     """
+
     def __init__(self, doc: Doc | None = None) -> None:
         """
         Creates a database.
@@ -42,17 +43,27 @@ class DB:
         self._event_maps = self._doc.get("events", type=Map)
         self._synced: list[DB] = []
         self._catalogue_maps.observe_deep(self._catalogues_changed)
-        self._catalogue_delete_callbacks: dict[str, list[Callable[[Any], None]]] = defaultdict(list)
+        self._catalogue_delete_callbacks: dict[str, list[Callable[[Any], None]]] = (
+            defaultdict(list)
+        )
         self._catalogue_create_callbacks: list[Callable[[Any, Any], None]] = []
-        self._catalogue_change_callbacks: dict[str, dict[str, list[Callable[[Any, Any], None]]]] = defaultdict(lambda: defaultdict(list))
+        self._catalogue_change_callbacks: dict[
+            str, dict[str, list[Callable[[Any, Any], None]]]
+        ] = defaultdict(lambda: defaultdict(list))
         self._catalogues: dict[str, Catalogue] = {}
         self._event_maps.observe_deep(self._events_changed)
-        self._event_delete_callbacks: dict[str, list[Callable[[Any], None]]] = defaultdict(list)
+        self._event_delete_callbacks: dict[str, list[Callable[[Any], None]]] = (
+            defaultdict(list)
+        )
         self._event_create_callbacks: list[Callable[[Any, Any], None]] = []
-        self._event_change_callbacks: dict[str, dict[str, list[Callable[[Any, Any], None]]]] = defaultdict(lambda: defaultdict(list))
+        self._event_change_callbacks: dict[
+            str, dict[str, list[Callable[[Any, Any], None]]]
+        ] = defaultdict(lambda: defaultdict(list))
         self._events: dict[str, Event] = {}
 
-    def _callback(self, callback: Callable[..., None], origin: "DB" | None, *args: Any) -> None:
+    def _callback(
+        self, callback: Callable[..., None], origin: "DB" | None, *args: Any
+    ) -> None:
         if origin is not self:
             callback(*args)
 
@@ -89,7 +100,9 @@ class DB:
         """
         return self._doc
 
-    def _catalogues_changed(self, events: list[ArrayEvent | MapEvent], transaction: Transaction) -> None:
+    def _catalogues_changed(
+        self, events: list[ArrayEvent | MapEvent], transaction: Transaction
+    ) -> None:
         for event in events:
             path = event.path  # type: ignore[union-attr]
             if len(path) == 0:
@@ -108,7 +121,9 @@ class DB:
                         del self._catalogue_change_callbacks[uuid]
                     elif action == "add":
                         for create_callback in self._catalogue_create_callbacks:
-                            create_callback(transaction.origin, self.get_catalogue(uuid))
+                            create_callback(
+                                transaction.origin, self.get_catalogue(uuid)
+                            )
             elif len(path) == 1:
                 # property of catalogue changed (not events)
                 assert isinstance(event, MapEvent)
@@ -119,7 +134,9 @@ class DB:
                         callbacks = self._catalogue_change_callbacks[uuid][key]
                         for callback in callbacks:
                             value = changed_keys[key]["newValue"]
-                            model = CatalogueModel.__pydantic_validator__.validate_assignment(CatalogueModel.model_construct(), key, value)
+                            model = CatalogueModel.__pydantic_validator__.validate_assignment(
+                                CatalogueModel.model_construct(), key, value
+                            )
                             callback(transaction.origin, getattr(model, key))
             elif len(path) == 2:
                 if path[1] == "events":
@@ -127,8 +144,8 @@ class DB:
                     assert isinstance(event, MapEvent)
                     uuid = path[0]
                     if (
-                        "add_events" in self._catalogue_change_callbacks[uuid] or
-                        "remove_events" in self._catalogue_change_callbacks[uuid]
+                        "add_events" in self._catalogue_change_callbacks[uuid]
+                        or "remove_events" in self._catalogue_change_callbacks[uuid]
                     ):
                         added_uuids = []
                         removed_uuids = []
@@ -139,12 +156,19 @@ class DB:
                             else:
                                 added_uuids.append(key)
                         if removed_uuids:
-                            callbacks = self._catalogue_change_callbacks[uuid]["remove_events"]
+                            callbacks = self._catalogue_change_callbacks[uuid][
+                                "remove_events"
+                            ]
                             for callback in callbacks:
                                 callback(transaction.origin, set(removed_uuids))
                         if added_uuids:
-                            result = {Event.from_map(self._event_maps[added_uuid], self) for added_uuid in added_uuids}
-                            callbacks = self._catalogue_change_callbacks[uuid]["add_events"]
+                            result = {
+                                Event.from_map(self._event_maps[added_uuid], self)
+                                for added_uuid in added_uuids
+                            }
+                            callbacks = self._catalogue_change_callbacks[uuid][
+                                "add_events"
+                            ]
                             for callback in callbacks:
                                 callback(transaction.origin, result)
                 else:
@@ -161,11 +185,15 @@ class DB:
                         elif val["action"] == "update":
                             added[key] = val["newValue"]
                     if removed:
-                        callbacks = self._catalogue_change_callbacks[uuid][f"remove_{name}"]
+                        callbacks = self._catalogue_change_callbacks[uuid][
+                            f"remove_{name}"
+                        ]
                         for callback in callbacks:
                             callback(transaction.origin, removed)
                     if added:
-                        callbacks = self._catalogue_change_callbacks[uuid][f"add_{name}"]
+                        callbacks = self._catalogue_change_callbacks[uuid][
+                            f"add_{name}"
+                        ]
                         for callback in callbacks:
                             callback(transaction.origin, added)
 
@@ -197,7 +225,11 @@ class DB:
                         callbacks = self._event_change_callbacks[uuid][key]
                         for callback in callbacks:
                             value = changed_keys[key]["newValue"]
-                            model = EventModel.__pydantic_validator__.validate_assignment(EventModel.model_construct(), key, value)
+                            model = (
+                                EventModel.__pydantic_validator__.validate_assignment(
+                                    EventModel.model_construct(), key, value
+                                )
+                            )
                             callback(transaction.origin, getattr(model, key))
             elif len(path) == 2:
                 assert isinstance(event, MapEvent)
@@ -227,7 +259,10 @@ class DB:
         Returns:
             The catalogues in the database.
         """
-        return {Catalogue.from_map(catalogue, self) for catalogue in self._catalogue_maps.values()}
+        return {
+            Catalogue.from_map(catalogue, self)
+            for catalogue in self._catalogue_maps.values()
+        }
 
     @property
     def events(self) -> set[Event]:
@@ -349,7 +384,7 @@ class DB:
         """
         self._event_create_callbacks.append(partial(self._callback, callback))
 
-    def get_catalogue(self, uuid_or_name: str) -> Catalogue:
+    def get_catalogue(self, uuid_or_name: UUID | str) -> Catalogue:
         """
         Args:
             uuid_or_name: The UUID of the catalogue to get, or its name.
@@ -357,6 +392,7 @@ class DB:
         Returns:
             The catalogue with the given UUID or name.
         """
+        uuid_or_name = str(uuid_or_name)
         try:
             catalogue = Catalogue.from_uuid(uuid_or_name, self)
         except KeyError:
@@ -365,10 +401,12 @@ class DB:
                     catalogue = Catalogue.from_uuid(uuid, self)
                     break
             else:
-                raise RuntimeError(f"No catalogue found with name or UUID: {uuid_or_name}")
+                raise RuntimeError(
+                    f"No catalogue found with name or UUID: {uuid_or_name}"
+                )
         return catalogue
 
-    def get_event(self, uuid: str) -> Event:
+    def get_event(self, uuid: UUID | str) -> Event:
         """
         Args:
             uuid: The UUID of the event to get.
@@ -376,12 +414,15 @@ class DB:
         Returns:
             The event with the given UUID.
         """
+        uuid = str(uuid)
         try:
             return Event.from_uuid(uuid, self)
         except KeyError:
             raise RuntimeError(f"No event found with UUID: {uuid}")
 
-    def _handle_sync_message(self, message: bytes, db: "DB", init: bool = False) -> None:
+    def _handle_sync_message(
+        self, message: bytes, db: "DB", init: bool = False
+    ) -> None:
         if init:
             _message = create_sync_message(self._doc)
             db._handle_sync_message(_message, self)
@@ -393,7 +434,10 @@ class DB:
                 if reply is not None:
                     db._handle_sync_message(reply, self)
             except RuntimeError as exc:
-                if str(exc) not in ("Already mutably borrowed", "Already in a transaction"):  # pragma: nocover
+                if str(exc) not in (
+                    "Already mutably borrowed",
+                    "Already in a transaction",
+                ):  # pragma: nocover
                     raise
 
     def sync(self, db: "DB") -> None:

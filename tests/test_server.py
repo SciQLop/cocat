@@ -1,19 +1,25 @@
+from uuid import uuid4
+
 import httpx
 import pytest
 from anyio import fail_after, sleep
-
-from cocat import DB
 from wiredb import bind, connect
 
+from cocat import DB
 
 pytestmark = pytest.mark.anyio
+
 
 async def test_websocket(free_tcp_port, tmp_path):
     update_path = tmp_path / "updates.y"
     async with bind("websocket", host="localhost", port=free_tcp_port):
         async with (
-            connect("websocket", host="http://localhost", port=free_tcp_port) as client0,
-            connect("websocket", host="http://localhost", port=free_tcp_port) as client1,
+            connect(
+                "websocket", host="http://localhost", port=free_tcp_port
+            ) as client0,
+            connect(
+                "websocket", host="http://localhost", port=free_tcp_port
+            ) as client1,
             connect("file", doc=client0.doc, path=update_path),
         ):
             db0 = DB(doc=client0.doc)
@@ -48,6 +54,11 @@ async def test_websocket(free_tcp_port, tmp_path):
                 catalogue1 = db1.get_catalogue(str(catalogue0.uuid))
                 catalogue1.add_events(event1)
 
+            with pytest.raises(
+                RuntimeError, match="No catalogue found with name or UUID"
+            ):
+                db1.get_catalogue(uuid4())
+
             with fail_after(1):
                 while True:
                     await sleep(0.01)
@@ -74,8 +85,20 @@ async def test_origin(server, user):
     cookies = httpx.Cookies()
     cookies.set("fastapiusersauth", cookie)
     async with (
-        connect("websocket", id="room/myroom", host=f"http://{host}", port=port, cookies=cookies) as client0,
-        connect("websocket", id="room/myroom", host=f"http://{host}", port=port, cookies=cookies) as client1,
+        connect(
+            "websocket",
+            id="room/myroom",
+            host=f"http://{host}",
+            port=port,
+            cookies=cookies,
+        ) as client0,
+        connect(
+            "websocket",
+            id="room/myroom",
+            host=f"http://{host}",
+            port=port,
+            cookies=cookies,
+        ) as client1,
     ):
         db0 = DB(doc=client0.doc)
         db1 = DB(doc=client1.doc)
