@@ -1,3 +1,4 @@
+import httpx
 import pytest
 from anyio import fail_after, sleep
 
@@ -62,3 +63,43 @@ async def test_websocket(free_tcp_port, tmp_path):
         pass
     assert db2.events == {event0, event1}
     assert db2.catalogues == {catalogue1}
+
+
+async def test_origin(server, user):
+    host, port = server
+    username, password = user
+    data = {"username": username, "password": password}
+    response = httpx.post(f"http://{host}:{port}/auth/jwt/login", data=data)
+    cookie = response.cookies.get("fastapiusersauth")
+    cookies = httpx.Cookies()
+    cookies.set("fastapiusersauth", cookie)
+    async with (
+        connect("websocket", id="room/myroom", host=f"http://{host}", port=port, cookies=cookies) as client0,
+        connect("websocket", id="room/myroom", host=f"http://{host}", port=port, cookies=cookies) as client1,
+    ):
+        db0 = DB(doc=client0.doc)
+        db1 = DB(doc=client1.doc)
+        events0 = []
+        events1 = []
+
+        def callback0(event):
+            events0.append(event)
+
+        def callback1(event):
+            events1.append(event)
+
+        db0.on_create_event(callback0)
+        db1.on_create_event(callback1)
+        event0 = db0.create_event(
+            start="2025-01-31",
+            stop="2026-01-31",
+            author="Paul",
+        )
+
+        with fail_after(1):
+            while True:
+                await sleep(0.01)
+                if events1:
+                    assert not events0
+                    assert events1 == [event0]
+                    break
