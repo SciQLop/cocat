@@ -268,3 +268,29 @@ async def save_event(event: Event | UUID | str) -> None:
         uuid = str(event)
     event = SESSION.get_local_event(uuid)
     await SESSION.connect(event.db.doc)
+
+
+def import_votable_file(file_path: str | Path, table_name: str | None = None) -> set[Catalogue]:
+    """
+    Imports a VOTable file into the database.
+
+    Args:
+        file_path: The VOTable file path.
+    """
+    from astropy.io.votable import parse  # type: ignore[import-untyped]
+
+    db = DB()
+    import_votable(parse(file_path), db, table_name=table_name)
+    return db.catalogues
+
+
+def export_votable_file(catalogues: Sequence[Catalogue] | Catalogue, file_path: str | Path) -> None:
+    """
+    Exports catalogues to a VOTable file.
+
+    Args:
+        catalogues: The catalogue(s) to export.
+        file_path: The path to the exported file.
+    """
+    with open(file_path, "wb") as f:
+        export_votable(catalogues).to_xml(f)

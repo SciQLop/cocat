@@ -4,14 +4,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from uuid import uuid4
 
-from astropy.io.votable import parse  # type: ignore[import-untyped]
-from astropy.io.votable.tree import VOTableFile, Resource, TableElement, Table, Field as VOField  # type: ignore[import-untyped]
-
 from .catalogue import Catalogue
-from .db import DB
+from .db import DB, Event
+
+if TYPE_CHECKING:
+    from astropy.io.votable.tree import VOTableFile, Table, Field as VOField  # type: ignore[import-untyped]
 
 
 @dataclass
@@ -34,6 +34,8 @@ class _VOTableCocatField:
         return True
 
     def make_vot_field(self, table: Table, name: str) -> VOField:
+        from astropy.io.votable.tree import Field as VOField
+
         if "name" not in self.attr:
             return VOField(table, name=name, **self.attr)
         return VOField(table, **self.attr)
@@ -90,7 +92,9 @@ ATTRIBUTES = [
 STANDARD_FIELDS = [v[0] for v in ATTRIBUTES]
 
 
-def export_votable(catalogues: Sequence[Catalogue] | Catalogue) -> VOTableFile:
+def export_votable(catalogues: Sequence[Catalogue] | Catalogue) -> "VOTableFile":
+    from astropy.io.votable.tree import VOTableFile, Resource, TableElement
+
     votable = VOTableFile()
 
     catalogue_list = [catalogues] if isinstance(catalogues, Catalogue) else list(catalogues)
@@ -150,18 +154,7 @@ def export_votable(catalogues: Sequence[Catalogue] | Catalogue) -> VOTableFile:
     return votable
 
 
-def export_votable_file(catalogues: Sequence[Catalogue] | Catalogue, file_path: str | Path) -> None:
-    with open(file_path, "wb") as f:
-        export_votable(catalogues).to_xml(f)
-
-
-def export_votable_str(catalogues: Sequence[Catalogue] | Catalogue) -> str:
-    content = BytesIO()
-    export_votable(catalogues).to_xml(content)
-    return content.getvalue().decode()
-
-
-def import_votable(votable: VOTableFile, table_name: str | None = None) -> DB:
+def import_votable(votable: "VOTableFile", db: DB, table_name: str | None = None) -> None:
     author = "VOTable Import"
     table_name = table_name or f"Imported Catalogue from {datetime.now()}"
 
@@ -210,7 +203,7 @@ def import_votable(votable: VOTableFile, table_name: str | None = None) -> DB:
         if len(required_field_names) > 0:  # pragma: nocover
             raise ValueError(f"VOTable import: required fields are missing for table {this_name}")
 
-        catalogue = {
+        catalogue: dict[str, Any] = {
             "name": this_name,
             "author": author,
             "events": [],
@@ -240,12 +233,63 @@ def import_votable(votable: VOTableFile, table_name: str | None = None) -> DB:
 
         db_dict["catalogues"].append(catalogue)
 
-    return DB.from_dict(db_dict)
+    with db.transaction():
+        for _event in db_dict["events"]:
+            db.create_event(**_event)
+        for _catalogue in db_dict["catalogues"]:
+            events = _catalogue.pop("events", [])
+            cat = db.create_catalogue(**_catalogue)
+            cat.add_events([Event.from_uuid(uuid, db) for uuid in events])
 
 
-def import_votable_file(file_path: str | Path, table_name: str | None = None) -> DB:
-    return import_votable(parse(file_path), table_name=table_name)
+def import_votable_file(file_path: str | Path, db: DB, table_name: str | None = None) -> None:
+    """
+    Imports a VOTable file into a database.
+
+    Args:
+        file_path: The VOTable file path.
+        db: The database into which to import the VOTable.
+    """
+    from astropy.io.votable import parse  # type: ignore[import-untyped]
+
+    import_votable(parse(file_path), db, table_name=table_name)
 
 
-def import_votable_str(xml_content: str, table_name: str | None = None) -> DB:
-    return import_votable(parse(BytesIO(xml_content.encode())), table_name=table_name)
+def import_votable_str(xml_content: str, db: DB, table_name: str | None = None) -> None:
+    """
+    Imports a VOTable XML string into a database.
+
+    Args:
+        xml_content: The VOTable content as an XML string.
+        db: The database into which to import the VOTable.
+    """
+    from astropy.io.votable import parse  # type: ignore[import-untyped]
+
+    import_votable(parse(BytesIO(xml_content.encode())), db, table_name=table_name)
+
+
+def export_votable_file(catalogues: Sequence[Catalogue] | Catalogue, file_path: str | Path) -> None:
+    """
+    Exports catalogues to a VOTable file.
+
+    Args:
+        catalogues: The catalogue(s) to export.
+        file_path: The path to the exported file.
+    """
+    with open(file_path, "wb") as f:
+        export_votable(catalogues).to_xml(f)
+
+
+def export_votable_str(catalogues: Sequence[Catalogue] | Catalogue) -> str:
+    """
+    Exports catalogues as a VOTable XML string.
+
+    Args:
+        catalogues: The catalogue(s) to export.
+
+    Returns:
+        The VOTable as an XML string.
+    """
+    content = BytesIO()
+    export_votable(catalogues).to_xml(content)
+    return content.getvalue().decode()

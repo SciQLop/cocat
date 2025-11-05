@@ -17,3 +17,7 @@
       - log_in
       - log_out
       - set_config
+      - export_votable_str
+      - export_votable_file
+      - import_votable_str
+      - import_votable_file

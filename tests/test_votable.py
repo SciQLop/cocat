@@ -112,14 +112,18 @@ def test_export_import(tmp_path):
     catalogue.add_events([event0, event1])
 
     export_votable_file(catalogue, votable_path)
-    db = import_votable_file(votable_path)
+
+    db = DB()
+    import_votable_file(votable_path, db)
 
     assert db.events == {event0, event1}
     assert len(db.catalogues) == 1
     assert list(db.catalogues)[0].name == catalogue.name
 
     votable_str = export_votable_str(catalogue)
-    db = import_votable_str(votable_str)
+
+    db = DB()
+    import_votable_str(votable_str, db)
 
     assert db.events == {event0, event1}
     assert len(db.catalogues) == 1
@@ -128,7 +132,8 @@ def test_export_import(tmp_path):
 
 def test_import_file():
     table = HERE / "data" / "Dst_Li2020.xml"
-    db = import_votable_file(table)
+    db = DB()
+    import_votable_file(table, db)
 
     assert len(db.catalogues) == 1
     catalogue = list(db.catalogues)[0]
