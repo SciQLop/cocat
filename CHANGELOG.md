@@ -1,5 +1,9 @@
 # Version history
 
+## 0.4.2
+
+- Add `range` getter/setter and `on_change_range`.
+
 ## 0.4.1
 
 - Add support for dynamic catalogues.
