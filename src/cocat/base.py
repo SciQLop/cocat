@@ -22,12 +22,11 @@ class Mixin:
             callback(*args)
 
     def _get_from_map(self, field: str) -> dict[str, Any]:
-        with self._db.transaction():
-            self._check_deleted()
-            map = cast(Map, self._map[field])
-            res = map.to_py()
-            assert res is not None
-            return res
+        self._check_deleted()
+        map = cast(Map, self._map[field])
+        res = map.to_py()
+        assert res is not None
+        return res
 
     def _set_in_map(self, field: str, value: dict[str, Any]) -> None:
         with self._db.transaction():

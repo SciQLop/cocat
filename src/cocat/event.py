@@ -44,11 +44,10 @@ class Event(Mixin):
         return hash(self._uuid)
 
     def _get(self, name: str) -> Any:
-        with self._db.transaction():
-            self._check_deleted()
-            value = self._map[name]
-            model = EventModel.__pydantic_validator__.validate_assignment(EventModel.model_construct(), name, value)
-            return getattr(model, name)
+        self._check_deleted()
+        value = self._map[name]
+        model = EventModel.__pydantic_validator__.validate_assignment(EventModel.model_construct(), name, value)
+        return getattr(model, name)
 
     def _set(self, name: str, value: Any, func: Callable[[Any], Any] | None = None) -> None:
         with self._db.transaction():
@@ -107,14 +106,13 @@ class Event(Mixin):
         Returns:
             The event as a dictionary.
         """
-        with self._db.transaction():
-            self._check_deleted()
-            dct = self._map.to_py()
-            assert dct is not None
-            dct["tags"] = list(dct["tags"].keys())
-            dct["products"] = list(dct["products"].keys())
-            dct["attributes"] = dict(sorted(dct["attributes"].items()))
-            return dict(sorted(dct.items()))
+        self._check_deleted()
+        dct = self._map.to_py()
+        assert dct is not None
+        dct["tags"] = list(dct["tags"].keys())
+        dct["products"] = list(dct["products"].keys())
+        dct["attributes"] = dict(sorted(dct["attributes"].items()))
+        return dict(sorted(dct.items()))
 
     def on_change_author(self, callback: Callable[[Any], None]) -> None:
         """
@@ -159,9 +157,8 @@ class Event(Mixin):
         Args:
             callback: The callback to call.
         """
-        with self._db.transaction():
-            self._check_deleted()
-            self._db._event_delete_callbacks[self._uuid].append(partial(self._callback, callback))
+        self._check_deleted()
+        self._db._event_delete_callbacks[self._uuid].append(partial(self._callback, callback))
 
     def delete(self):
         """

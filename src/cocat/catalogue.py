@@ -50,11 +50,10 @@ class Catalogue(Mixin):
         return str(event.uuid) in self._map["events"]
 
     def _get(self, name: str) -> Any:
-        with self._db.transaction():
-            self._check_deleted()
-            value = self._map[name]
-            model = CatalogueModel.__pydantic_validator__.validate_assignment(CatalogueModel.model_construct(), name, value)
-            return getattr(model, name)
+        self._check_deleted()
+        value = self._map[name]
+        model = CatalogueModel.__pydantic_validator__.validate_assignment(CatalogueModel.model_construct(), name, value)
+        return getattr(model, name)
 
     def _set(self, name: str, value: Any) -> None:
         with self._db.transaction():
@@ -109,14 +108,13 @@ class Catalogue(Mixin):
         Returns:
             The catalogue as a dictionary.
         """
-        with self._db.transaction():
-            self._check_deleted()
-            dct = self._map.to_py()
-            assert dct is not None
-            dct["tags"] = list(dct["tags"].keys())
-            dct["events"] = list(dct["events"].keys())
-            dct["attributes"] = dict(sorted(dct["attributes"].items()))
-            return dict(sorted(dct.items()))
+        self._check_deleted()
+        dct = self._map.to_py()
+        assert dct is not None
+        dct["tags"] = list(dct["tags"].keys())
+        dct["events"] = list(dct["events"].keys())
+        dct["attributes"] = dict(sorted(dct["attributes"].items()))
+        return dict(sorted(dct.items()))
 
     def on_change_name(self, callback: Callable[[str], None]) -> None:
         """
@@ -143,9 +141,8 @@ class Catalogue(Mixin):
         Args:
             callback: The callback to call.
         """
-        with self._db.transaction():
-            self._check_deleted()
-            self._db._catalogue_delete_callbacks[self._uuid].append(partial(self._callback, callback))
+        self._check_deleted()
+        self._db._catalogue_delete_callbacks[self._uuid].append(partial(self._callback, callback))
 
     def delete(self) -> None:
         """
@@ -245,11 +242,10 @@ class Catalogue(Mixin):
         s = SimpleEval()
         s.functions = {"datetime": datetime, "catalogue": self._db.get_catalogue}
         events = set()
-        with self._db.transaction():
-            for event in self._db.events:
-                s.names = {"event": event}
-                if s.eval(self._condition):
-                    events.add(event)
+        for event in self._db.events:
+            s.names = {"event": event}
+            if s.eval(self._condition):
+                events.add(event)
 
         return events
 
@@ -267,10 +263,9 @@ class Catalogue(Mixin):
         Returns:
             The (static) events in the catalogue.
         """
-        with self._db.transaction():
-            self._check_deleted()
-            event_uuids = cast(Map, self._map["events"])
-            return {Event.from_map(self._db._event_maps[uuid], self._db) for uuid in event_uuids.keys()}
+        self._check_deleted()
+        event_uuids = cast(Map, self._map["events"])
+        return {Event.from_map(self._db._event_maps[uuid], self._db) for uuid in event_uuids.keys()}
 
     @events.setter
     def events(self, value: set[Event]) -> None:
