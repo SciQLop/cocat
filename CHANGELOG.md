@@ -1,5 +1,10 @@
 # Version history
 
+## 0.4.1
+
+- Add support for dynamic catalogues.
+- Don't require a transaction for read-only operations.
+
 ## 0.4.0
 
 - Add user authentication.

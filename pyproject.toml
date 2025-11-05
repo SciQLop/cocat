@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "cocat"
-version = "0.4.0"
+version = "0.4.1"
 description = "CRDT-based tscat"
 license = "MIT"
 license-files = ["LICENSE"]
