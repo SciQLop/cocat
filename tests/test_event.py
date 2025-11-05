@@ -50,6 +50,11 @@ def test_event():
     event0.stop = "2026-01-30"
     assert event1.stop == datetime(2026, 1, 30, 0, 0)
 
+    event0.range = datetime(2027, 1, 30, 0, 0), datetime(2028, 1, 30, 0, 0)
+    assert event0.range == (datetime(2027, 1, 30, 0, 0), datetime(2028, 1, 30, 0, 0))
+    assert event0.start == datetime(2027, 1, 30, 0, 0)
+    assert event0.stop == datetime(2028, 1, 30, 0, 0)
+
     assert event1.author == "John"
     event0.author = "Jeane"
     assert event1.author == "Jeane"
@@ -100,13 +105,20 @@ def test_event():
     event0.start = "2025-01-29"
     event0.stop = "2026-01-29"
     event0.start = "2025-01-28"
-
     assert values == [datetime(2025, 1, 29, 0, 0), datetime(2025, 1, 28, 0, 0)]
 
     values.clear()
     event1.on_change_stop(callback)
     event0.stop = "2026-01-28"
     assert values == [datetime(2026, 1, 28, 0, 0)]
+
+    range_values = []
+    event1.on_change_range(lambda start, stop: range_values.append((start, stop)))
+    event0.range = "2025-01-27", "2026-01-27"
+    assert range_values == [(datetime(2025, 1, 27, 0, 0), datetime(2026, 1, 27, 0, 0))]
+    range_values.clear()
+    event0.range = "2025-01-27", "2026-01-26"
+    assert range_values == [(datetime(2025, 1, 27, 0, 0), datetime(2026, 1, 26, 0, 0))]
 
     values.clear()
     event1.on_change_author(callback)

@@ -141,6 +141,28 @@ class Event(Mixin):
         """
         self._on_change("stop", callback)
 
+    def on_change_range(self, callback: Callable[[datetime, datetime], None]) -> None:
+        """
+        Registers a callback to be called when the event start and/or stop dates change.
+
+        Args:
+            callback: The callback to call with the new range.
+        """
+        range: list[None | datetime] = [None, None]
+
+        def callback_start(start: datetime) -> None:
+            if range != [start, self.stop]:
+                range[0], range[1] = start, self.stop
+                callback(start, self.stop)
+
+        def callback_stop(stop: datetime) -> None:
+            if range != [self.start, stop]:
+                range[0], range[1] = self.start, stop
+                callback(self.start, stop)
+
+        self._on_change("start", callback_start)
+        self._on_change("stop", callback_stop)
+
     def on_change_rating(self, callback: Callable[[Any], None]) -> None:
         """
         Registers a callback to be called when the event rating changes.
@@ -203,6 +225,25 @@ class Event(Mixin):
             value: The stop date of the event to set.
         """
         self._set("stop", value, str)
+
+    @property
+    def range(self) -> tuple[datetime, datetime]:
+        """
+        Returns:
+            The start and stop dates of the event.
+        """
+        return self._get("start"), self._get("stop")
+
+    @range.setter
+    def range(self, value: tuple[datetime, datetime]) -> None:
+        """
+        Args:
+            value: The start and stop dates of the event to set.
+        """
+        with self._db.transaction():
+            start, stop = value
+            self._set("start", start, str)
+            self._set("stop", stop, str)
 
     @property
     def rating(self) -> int:
