@@ -83,7 +83,7 @@ async def test_origin(server, user):
         events1 = []
 
         def callback0(event):
-            events0.append(event)
+            events0.append(event)  # pragma: nocover
 
         def callback1(event):
             events1.append(event)
