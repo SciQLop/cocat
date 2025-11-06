@@ -12,8 +12,7 @@ from wiredb import connect as wire_connect
 from .catalogue import Catalogue
 from .db import DB
 from .event import Event
-from .votable import export_votable_file as _export_votable_file
-from .votable import import_votable_file as _import_votable_file
+from .votable import export_votable_file, import_votable_file
 
 
 class Session:
@@ -31,11 +30,11 @@ class Session:
         self.room_id = room_id
         self.db = DB()
         self.task: Task | None = None
-        self.connected = anyio.Event()
+        self.connected = False
         self.send_stream, self.receive_stream = anyio.create_memory_object_stream()
 
     def check_connected(self) -> None:
-        if not self.connected.is_set():
+        if not self.connected:
             raise RuntimeError("Not logged in")
 
     async def connect(self) -> None:
@@ -52,7 +51,7 @@ class Session:
                 async with wire_connect(
                     "file", doc=self.db.doc, path=self.file_path
                 ) as self.file:
-                    self.connected.set()
+                    self.connected = True
                     await self.send_stream.send(None)
                     await anyio.sleep_forever()
         except Exception as exc:
@@ -89,18 +88,27 @@ def set_config(
 
 
 async def wait_connected() -> None:
+    """
+    Wait for the connection to be established with the server.
+    """
     res = await SESSION.receive_stream.receive()
     if res is not None:
         raise res
 
 
 async def synchronize() -> None:
-    await SESSION.receive_stream.receive()
+    """
+    Does the initial synchronization of the client with other peers.
+    """
+    await wait_connected()
     SESSION.client.pull()
     await SESSION.client.synchronized.wait()
 
 
 def connect() -> None:
+    """
+    Launches the connection with the server in the background.
+    """
     SESSION.task = create_task(SESSION.connect())
 
 
@@ -131,7 +139,7 @@ def log_out() -> None:
     assert SESSION.task is not None
     SESSION.task.cancel()
     SESSION.task = None
-    SESSION.connected = anyio.Event()
+    SESSION.connected = False
     SESSION.send_stream, SESSION.receive_stream = anyio.create_memory_object_stream()
 
 
@@ -245,7 +253,7 @@ def save() -> None:
     SESSION.client.push()
 
 
-def import_votable_file(
+def import_votable(
     file_path: str | Path, table_name: str | None = None
 ) -> set[Catalogue]:  # pragma: nocover
     """
@@ -254,11 +262,11 @@ def import_votable_file(
     Args:
         file_path: The VOTable file path.
     """
-    _import_votable_file(file_path, SESSION.db, table_name=table_name)
+    import_votable_file(file_path, SESSION.db, table_name=table_name)
     return SESSION.db.catalogues
 
 
-def export_votable_file(
+def export_votable(
     catalogues: Sequence[Catalogue] | Catalogue, file_path: str | Path
 ) -> None:  # pragma: nocover
     """
@@ -268,4 +276,4 @@ def export_votable_file(
         catalogues: The catalogue(s) to export.
         file_path: The path to the exported file.
     """
-    _export_votable_file(catalogues, file_path)
+    export_votable_file(catalogues, file_path)
