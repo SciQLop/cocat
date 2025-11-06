@@ -1,4 +1,5 @@
-from asyncio import Task, create_task
+import atexit
+from asyncio import Task, create_task, get_event_loop
 from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
@@ -51,6 +52,7 @@ class Session:
                 async with wire_connect(
                     "file", doc=self.db.doc, path=self.file_path
                 ) as self.file:
+                    atexit.register(save_on_exit)
                     self.connected = True
                     await self.send_stream.send(None)
                     await anyio.sleep_forever()
@@ -277,3 +279,12 @@ def export_votable(
         file_path: The path to the exported file.
     """
     export_votable_file(catalogues, file_path)
+
+
+def save_on_exit() -> None:
+    response = input("Save changes (Y/n)? ")
+    if not response or response.lower().startswith("y"):
+        save()
+        loop = get_event_loop()
+        loop.run_until_complete(anyio.wait_all_tasks_blocked())
+        print("Changes have been saved.")
