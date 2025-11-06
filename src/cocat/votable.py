@@ -22,18 +22,18 @@ class _VOTableCocatField:
     convert_cocat: Callable[[Any], Any]
     cocat_name: str | None = None
 
-    def name(self, field: VOField) -> str:
+    def name(self, field: "VOField") -> str:
         if self.cocat_name:
             return self.cocat_name
         return field.name
 
-    def match(self, field: VOField) -> bool:
+    def match(self, field: "VOField") -> bool:
         for k, v in self.attr.items():
             if field.__getattribute__(k) != v:
                 return False
         return True
 
-    def make_vot_field(self, table: Table, name: str) -> VOField:
+    def make_vot_field(self, table: Table, name: str) -> "VOField":
         from astropy.io.votable.tree import Field as VOField
 
         if "name" not in self.attr:
