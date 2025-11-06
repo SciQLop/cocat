@@ -1,106 +1,73 @@
-from datetime import datetime
+from asyncio import Task, create_task
 from collections.abc import Iterable
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Sequence
 from uuid import UUID
 
+import anyio
 import httpx
-from anyio import Lock
-from cocat import DB, Catalogue, Event
-from pycrdt import Doc
-from wiredb import connect
+from wiredb import connect as wire_connect
+
+from .catalogue import Catalogue
+from .db import DB
+from .event import Event
+from .votable import export_votable_file, import_votable_file
 
 
 class Session:
-    def __init__(self, host: str = "http://localhost", port: int = 8000, file_path: str = "updates.y", room_id: str = "room0"):
-        self.catalogues: dict[str, Catalogue] = {}
-        self.events: dict[str, Event] = {}
+    def __init__(
+        self,
+        host: str = "http://localhost",
+        port: int = 8000,
+        file_path: str = "updates.y",
+        room_id: str = "room0",
+    ):
         self.host = host
         self.port = port
         self.cookies = httpx.Cookies()
         self.file_path = file_path
         self.room_id = room_id
-        self.lock = Lock()
+        self.db = DB()
+        self.task: Task | None = None
+        self.connected = False
+        self.send_stream, self.receive_stream = anyio.create_memory_object_stream()
 
-    async def connect(self, doc: Doc) -> None:
-        async with self.lock:
-            async with connect("websocket", id=f"room/{self.room_id}", doc=doc, host=self.host, port=self.port, cookies=self.cookies) as self.client:
-                async with connect("file", doc=doc, path=self.file_path) as self.file:
-                    pass
+    def check_connected(self) -> None:
+        if not self.connected:
+            raise RuntimeError("Not logged in")
 
-    def create_catalogue(
-        self,
-        name: str,
-        author: str,
-        uuid: UUID | str | bytes | bytearray | None = None,
-        tags: list[str] | None = None,
-        attributes: dict[str, Any] | None = None,
-        events: Iterable[Event] | Event | None = None,
-    ):
-        db = DB()
-        catalogue = db.create_catalogue(
-            name=name,
-            author=author,
-            uuid=uuid,
-            tags=tags,
-            attributes=attributes,
-            events=events,
-        )
-        self.catalogues[str(catalogue.uuid)] = catalogue
-        self.catalogues[catalogue.name] = catalogue
-        return catalogue
-
-    def create_event(
-        self,
-        start: datetime | int | float | str,
-        stop: datetime | int | float | str,
-        author: str,
-        uuid: UUID | str | bytes | bytearray | None = None,
-        tags: list[str] | None = None,
-        products: list[str] | None = None,
-        rating: int | None = None,
-        attributes: dict[str, Any] | None = None,
-    ):
-        db = DB()
-        event = db.create_event(
-            start=start,
-            stop=stop,
-            author=author,
-            uuid=uuid,
-            tags=tags,
-            products=products,
-            rating=rating,
-            attributes=attributes,
-        )
-        self.events[str(event.uuid)] = event
-        return event
-
-    def get_local_catalogue(self, uuid_or_name: str) -> Catalogue:
-        return self.catalogues[uuid_or_name]
-
-    async def get_remote_catalogue(self, uuid_or_name: str) -> Catalogue:
-        db = DB()
-        await self.connect(db.doc)
-        catalogue = db.get_catalogue(uuid_or_name)
-        self.catalogues[str(catalogue.uuid)] = catalogue
-        self.catalogues[str(catalogue.name)] = catalogue
-        return catalogue
-
-    def get_local_event(self, uuid: str) -> Event:
-        return self.events[uuid]
-
-    async def get_remote_event(self, uuid: str) -> Event:
-        db = DB()
-        await self.connect(db.doc)
-        event = db.get_event(uuid)
-        self.events[str(event.uuid)] = event
-        return event
+    async def connect(self) -> None:
+        try:
+            async with wire_connect(
+                "websocket",
+                id=f"room/{self.room_id}",
+                doc=self.db.doc,
+                auto_update=False,
+                host=self.host,
+                port=self.port,
+                cookies=self.cookies,
+            ) as self.client:
+                async with wire_connect(
+                    "file", doc=self.db.doc, path=self.file_path
+                ) as self.file:
+                    self.connected = True
+                    await self.send_stream.send(None)
+                    await anyio.sleep_forever()
+        except Exception as exc:
+            await self.send_stream.send(exc)
 
 
 SESSION = Session()
 
 
-def set_config(*, host: str | None = None, port: int | None = None, file_path: str | None = None, room_id: str | None = None) -> None:
+def set_config(
+    *,
+    host: str | None = None,
+    port: int | None = None,
+    file_path: str | None = None,
+    room_id: str | None = None,
+) -> None:
     """
     Sets the configuration of the current session.
 
@@ -120,6 +87,31 @@ def set_config(*, host: str | None = None, port: int | None = None, file_path: s
         SESSION.room_id = room_id
 
 
+async def wait_connected() -> None:
+    """
+    Wait for the connection to be established with the server.
+    """
+    res = await SESSION.receive_stream.receive()
+    if res is not None:
+        raise res
+
+
+async def synchronize() -> None:
+    """
+    Does the initial synchronization of the client with other peers.
+    """
+    await wait_connected()
+    SESSION.client.pull()
+    await SESSION.client.synchronized.wait()
+
+
+def connect() -> None:
+    """
+    Launches the connection with the server in the background.
+    """
+    SESSION.task = create_task(SESSION.connect())
+
+
 def log_in(username: str, password: str) -> None:
     """
     Log into the server.
@@ -133,14 +125,22 @@ def log_in(username: str, password: str) -> None:
     cookie = response.cookies.get("fastapiusersauth")
     assert cookie is not None
     SESSION.cookies.set("fastapiusersauth", cookie)
+    connect()
 
 
 def log_out() -> None:
     """
     Log out of the server.
     """
-    httpx.post(f"{SESSION.host}:{SESSION.port}/auth/jwt/logout", cookies=SESSION.cookies)
+    httpx.post(
+        f"{SESSION.host}:{SESSION.port}/auth/jwt/logout", cookies=SESSION.cookies
+    )
     SESSION.cookies = httpx.Cookies()
+    assert SESSION.task is not None
+    SESSION.task.cancel()
+    SESSION.task = None
+    SESSION.connected = False
+    SESSION.send_stream, SESSION.receive_stream = anyio.create_memory_object_stream()
 
 
 def create_catalogue(
@@ -166,7 +166,7 @@ def create_catalogue(
     Returns:
         The created [Catalogue][cocat.Catalogue].
     """
-    return SESSION.create_catalogue(
+    return SESSION.db.create_catalogue(
         name=name,
         author=author,
         uuid=uuid,
@@ -203,7 +203,7 @@ def create_event(
     Returns:
         The created [Event][cocat.Event].
     """
-    return SESSION.create_event(
+    return SESSION.db.create_event(
         start=start,
         stop=stop,
         author=author,
@@ -215,78 +215,60 @@ def create_event(
     )
 
 
-async def load_catalogue(uuid_or_name: UUID | str) -> Catalogue:
+def get_catalogue(uuid_or_name: UUID | str) -> Catalogue:
     """
-    Loads a catalogue from the server.
-
     Args:
-        uuid_or_name: The UUID or the name of the catalogue to load.
+        uuid_or_name: The UUID or the name of the catalogue to get.
 
     Returns:
-        The loaded catalogue.
+        The catalogue with the given UUID or name.
     """
-    return await SESSION.get_remote_catalogue(str(uuid_or_name))
+    return SESSION.db.get_catalogue(uuid_or_name)
 
 
-async def save_catalogue(catalogue: Catalogue | UUID | str) -> None:
+def get_event(uuid: UUID | str) -> Event:
     """
-    Saves a catalogue in the server.
-
     Args:
-        catalogue: The catalogue to save (or its UUID).
-    """
-    if isinstance(catalogue, Catalogue):
-        uuid_or_name = str(catalogue.uuid)
-    else:
-        uuid_or_name = str(catalogue)
-    catalogue = SESSION.get_local_catalogue(uuid_or_name)
-    await SESSION.connect(catalogue.db.doc)
-
-
-async def load_event(uuid: UUID | str) -> Event:
-    """
-    Loads an event from the server.
-
-    Args:
-        uuid: The UUID of the event to load.
+        uuid: The UUID of the event to get.
 
     Returns:
-        The loaded event.
+        The event with the given UUID.
     """
-    return await SESSION.get_remote_event(str(uuid))
+    return SESSION.db.get_event(uuid)
 
 
-async def save_event(event: Event | UUID | str) -> None:
+def refresh() -> None:
     """
-    Saves an event in the server.
-
-    Args:
-        event: The event to save (or its UUID).
+    Receives remote changes from the server.
     """
-    if isinstance(event, Event):
-        uuid = str(event.uuid)
-    else:
-        uuid = str(event)
-    event = SESSION.get_local_event(uuid)
-    await SESSION.connect(event.db.doc)
+    SESSION.check_connected()
+    SESSION.client.pull()
 
 
-def import_votable_file(file_path: str | Path, table_name: str | None = None) -> set[Catalogue]:
+def save() -> None:
+    """
+    Sends local changes to the server.
+    """
+    SESSION.check_connected()
+    SESSION.client.push()
+
+
+def import_votable(
+    file_path: str | Path, table_name: str | None = None
+) -> set[Catalogue]:  # pragma: nocover
     """
     Imports a VOTable file into the database.
 
     Args:
         file_path: The VOTable file path.
     """
-    from astropy.io.votable import parse  # type: ignore[import-untyped]
-    from .votable import import_votable
-
-    db = DB()
-    import_votable(parse(file_path), db, table_name=table_name)
-    return db.catalogues
+    import_votable_file(file_path, SESSION.db, table_name=table_name)
+    return SESSION.db.catalogues
 
 
-def export_votable_file(catalogues: Sequence[Catalogue] | Catalogue, file_path: str | Path) -> None:
+def export_votable(
+    catalogues: Sequence[Catalogue] | Catalogue, file_path: str | Path
+) -> None:  # pragma: nocover
     """
     Exports catalogues to a VOTable file.
 
@@ -294,7 +276,4 @@ def export_votable_file(catalogues: Sequence[Catalogue] | Catalogue, file_path: 
         catalogues: The catalogue(s) to export.
         file_path: The path to the exported file.
     """
-    from .votable import export_votable
-
-    with open(file_path, "wb") as f:
-        export_votable(catalogues).to_xml(f)
+    export_votable_file(catalogues, file_path)

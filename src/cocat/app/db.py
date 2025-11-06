@@ -22,7 +22,7 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     pass
 
 
-class AccessToken(SQLAlchemyBaseAccessTokenTableUUID, Base):  
+class AccessToken(SQLAlchemyBaseAccessTokenTableUUID, Base):
     pass
 
 

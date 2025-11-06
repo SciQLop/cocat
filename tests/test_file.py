@@ -1,11 +1,10 @@
 import pytest
-
 from anyio import sleep
 from pycrdt import Doc, Text
 from wiredb import connect
 
-
 pytestmark = pytest.mark.anyio
+
 
 async def test_file_without_write_delay(tmp_path):
     update_path = tmp_path / "updates.y"

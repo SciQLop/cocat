@@ -4,7 +4,12 @@ from pathlib import Path
 import pytest
 
 from cocat import DB
-from cocat.votable import export_votable_file, export_votable_str, import_votable_file, import_votable_str
+from cocat.votable import (
+    export_votable_file,
+    export_votable_str,
+    import_votable_file,
+    import_votable_str,
+)
 
 HERE = Path(__file__).parent
 
@@ -19,7 +24,7 @@ def test_export_different_attributes():
         attributes={
             "key0": 0,
             "key1": 1,
-        }
+        },
     )
     event1 = db.create_event(
         start="2027-01-31",
@@ -28,7 +33,7 @@ def test_export_different_attributes():
         attributes={
             "key1": 2,
             "key2": 3,
-        }
+        },
     )
     catalogue = db.create_catalogue(
         name="cat",
@@ -36,11 +41,16 @@ def test_export_different_attributes():
         attributes={
             "key3": 4,
             "key4": 5,
-        }
+        },
     )
     catalogue.add_events([event0, event1])
 
-    with pytest.raises(ValueError, match=re.escape("Export VOTable: not all attributes are present in all events ('key0', 'key2')")):
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Export VOTable: not all attributes are present in all events ('key0', 'key2')"
+        ),
+    ):
         export_votable_str(catalogue)
 
 
@@ -54,7 +64,7 @@ def test_export_different_attribute_types():
         attributes={
             "key0": 0,
             "key1": 1,
-        }
+        },
     )
     event1 = db.create_event(
         start="2027-01-31",
@@ -63,7 +73,7 @@ def test_export_different_attribute_types():
         attributes={
             "key0": "foo",
             "key1": "bar",
-        }
+        },
     )
     catalogue = db.create_catalogue(
         name="cat",
@@ -71,11 +81,16 @@ def test_export_different_attribute_types():
         attributes={
             "key3": 4,
             "key4": 5,
-        }
+        },
     )
     catalogue.add_events([event0, event1])
 
-    with pytest.raises(ValueError, match=re.escape("Export VOTable: not all value types are identical for all events for attribute key0")):
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Export VOTable: not all value types are identical for all events for attribute key0"
+        ),
+    ):
         export_votable_str(catalogue)
 
 
@@ -90,7 +105,7 @@ def test_export_import(tmp_path):
         attributes={
             "key0": 0,
             "key1": 1,
-        }
+        },
     )
     event1 = db.create_event(
         start="2027-01-31",
@@ -99,7 +114,7 @@ def test_export_import(tmp_path):
         attributes={
             "key0": 2,
             "key1": 3,
-        }
+        },
     )
     catalogue = db.create_catalogue(
         name="cat",
@@ -107,7 +122,7 @@ def test_export_import(tmp_path):
         attributes={
             "key3": 4,
             "key4": 5,
-        }
+        },
     )
     catalogue.add_events([event0, event1])
 
@@ -140,4 +155,13 @@ def test_import_file():
     assert catalogue.name == "Dst_Li2020"
     assert len(db.events) == 95
     assert len(catalogue.events) == 95
-    assert len([event for event in catalogue.events if event.author == "vincent.genot@irap.omp.eu"]) == 95
+    assert (
+        len(
+            [
+                event
+                for event in catalogue.events
+                if event.author == "vincent.genot@irap.omp.eu"
+            ]
+        )
+        == 95
+    )

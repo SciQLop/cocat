@@ -4,14 +4,18 @@ from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from .catalogue import Catalogue
 from .db import DB, Event
 
 if TYPE_CHECKING:
-    from astropy.io.votable.tree import VOTableFile, Table, Field as VOField  # type: ignore[import-untyped]
+    from astropy.io.votable.tree import Field as VOField  # type: ignore[import-untyped]
+    from astropy.io.votable.tree import (  # type: ignore[import-untyped]
+        Table,
+        VOTableFile,
+    )
 
 
 @dataclass
@@ -43,7 +47,9 @@ class _VOTableCocatField:
 
 class _VOTableCocatFieldSpecialDateTime(_VOTableCocatField):
     def __init__(self, attrs: dict[str, str], cocat_name: str | None = None) -> None:
-        attrs.update({"datatype": "char", "xtype": "dateTime", "utype": "", "arraysize": "*"})
+        attrs.update(
+            {"datatype": "char", "xtype": "dateTime", "utype": "", "arraysize": "*"}
+        )
         super().__init__(datetime, attrs, datetime.isoformat, str, cocat_name)
 
 
@@ -63,20 +69,46 @@ def _vo_table_field_from(arg: type | str) -> _VOTableCocatField:
 
 
 VOTABLE_COCAT_FIELDS = [
-    _VOTableCocatFieldSpecialDateTime({"name": "Start Time", "ID": "TimeIntervalStart", "ucd": "time.start"}, "start"),
-    _VOTableCocatFieldSpecialDateTime({"name": "Stop Time", "ID": "TimeIntervalStop", "ucd": "time.end"}, "stop"),
+    _VOTableCocatFieldSpecialDateTime(
+        {"name": "Start Time", "ID": "TimeIntervalStart", "ucd": "time.start"}, "start"
+    ),
+    _VOTableCocatFieldSpecialDateTime(
+        {"name": "Stop Time", "ID": "TimeIntervalStop", "ucd": "time.end"}, "stop"
+    ),
     _VOTableCocatFieldSpecialDateTime({}),
-    _VOTableCocatField(int, {"datatype": "long"},
-                        lambda x: 0 if x is None else x,
-                        lambda x: None if x == 0 else x, "rating"),
+    _VOTableCocatField(
+        int,
+        {"datatype": "long"},
+        lambda x: 0 if x is None else x,
+        lambda x: None if x == 0 else x,
+        "rating",
+    ),
     _VOTableCocatField(int, {"datatype": "long"}, int, int),
     _VOTableCocatField(float, {"datatype": "double"}, float, float),
     _VOTableCocatField(bool, {"datatype": "boolean"}, bool, bool),
-    _VOTableCocatField(list, {"datatype": "char", "arraysize": "*", "utype": "json"}, json.dumps, json.loads),
-    _VOTableCocatField(list, {"datatype": "char", "arraysize": "*", "name": "products"}, json.dumps, json.loads,
-                        "products"),
-    _VOTableCocatField(list, {"datatype": "char", "arraysize": "*", "name": "tags"}, json.dumps, json.loads, "tags"),
-    _VOTableCocatField(str, {"datatype": "char", "arraysize": "*"}, str, str),  # last item, catch all strings
+    _VOTableCocatField(
+        list,
+        {"datatype": "char", "arraysize": "*", "utype": "json"},
+        json.dumps,
+        json.loads,
+    ),
+    _VOTableCocatField(
+        list,
+        {"datatype": "char", "arraysize": "*", "name": "products"},
+        json.dumps,
+        json.loads,
+        "products",
+    ),
+    _VOTableCocatField(
+        list,
+        {"datatype": "char", "arraysize": "*", "name": "tags"},
+        json.dumps,
+        json.loads,
+        "tags",
+    ),
+    _VOTableCocatField(
+        str, {"datatype": "char", "arraysize": "*"}, str, str
+    ),  # last item, catch all strings
 ]
 
 ATTRIBUTES = [
@@ -93,11 +125,13 @@ STANDARD_FIELDS = [v[0] for v in ATTRIBUTES]
 
 
 def export_votable(catalogues: Sequence[Catalogue] | Catalogue) -> "VOTableFile":
-    from astropy.io.votable.tree import VOTableFile, Resource, TableElement
+    from astropy.io.votable.tree import Resource, TableElement, VOTableFile
 
     votable = VOTableFile()
 
-    catalogue_list = [catalogues] if isinstance(catalogues, Catalogue) else list(catalogues)
+    catalogue_list = (
+        [catalogues] if isinstance(catalogues, Catalogue) else list(catalogues)
+    )
 
     if len(catalogue_list) == 1:
         catalogue = catalogue_list[0]
@@ -108,35 +142,51 @@ def export_votable(catalogues: Sequence[Catalogue] | Catalogue) -> "VOTableFile"
 
     attributes = list(ATTRIBUTES)
 
-    all_attributes = set(attribute for catalogue in catalogue_list for attribute in catalogue.attributes.keys())
-    common_attributes = set.intersection(*[set(catalogue.attributes) for catalogue in catalogue_list])
+    all_attributes = set(
+        attribute
+        for catalogue in catalogue_list
+        for attribute in catalogue.attributes.keys()
+    )
+    common_attributes = set.intersection(
+        *[set(catalogue.attributes) for catalogue in catalogue_list]
+    )
 
     for catalogue in catalogue_list:
         table = TableElement(votable, name=catalogue.name.replace(" ", "_"))
         resource.tables.append(table)
 
-        all_attributes = set(attribute for event in catalogue.events for attribute in event.attributes.keys())
-        common_attributes = set.intersection(*[set(event.attributes) for event in catalogue.events])
+        all_attributes = set(
+            attribute
+            for event in catalogue.events
+            for attribute in event.attributes.keys()
+        )
+        common_attributes = set.intersection(
+            *[set(event.attributes) for event in catalogue.events]
+        )
 
         # check that all attributes are present in every event
         if all_attributes != common_attributes:
             raise ValueError(
-                "Export VOTable: not all attributes are present in all events " +
-                f"{tuple(sorted(all_attributes - common_attributes))}"
+                "Export VOTable: not all attributes are present in all events "
+                + f"{tuple(sorted(all_attributes - common_attributes))}"
             )
 
         for attr in sorted(all_attributes):
             # check that the type of all attribute values is identical
-            attrs_value_types = list(set(type(event.attributes[attr]) for event in catalogue.events))
+            attrs_value_types = list(
+                set(type(event.attributes[attr]) for event in catalogue.events)
+            )
             if len(attrs_value_types) != 1:
                 raise ValueError(
-                    "Export VOTable: not all value types are " +
-                    f"identical for all events for attribute {attr}"
+                    "Export VOTable: not all value types are "
+                    + f"identical for all events for attribute {attr}"
                 )
 
             attributes.append((attr, _vo_table_field_from(attrs_value_types[0])))
 
-        table.fields.extend([vtf.make_vot_field(votable, name) for name, vtf in attributes])
+        table.fields.extend(
+            [vtf.make_vot_field(votable, name) for name, vtf in attributes]
+        )
 
         table.create_arrays(len(catalogue.events))
         for i, event in enumerate(catalogue.events):
@@ -154,7 +204,9 @@ def export_votable(catalogues: Sequence[Catalogue] | Catalogue) -> "VOTableFile"
     return votable
 
 
-def import_votable(votable: "VOTableFile", db: DB, table_name: str | None = None) -> None:
+def import_votable(
+    votable: "VOTableFile", db: DB, table_name: str | None = None
+) -> None:
     author = "VOTable Import"
     table_name = table_name or f"Imported Catalogue from {datetime.now()}"
 
@@ -191,8 +243,8 @@ def import_votable(votable: "VOTableFile", db: DB, table_name: str | None = None
                     break
             else:  # pragma: nocover
                 raise ValueError(
-                    f"VOTable import: cannot import field: {field.ID}, {field.name}, {field.datatype}," +
-                    f" {field.xtype}"
+                    f"VOTable import: cannot import field: {field.ID}, {field.name}, {field.datatype},"
+                    + f" {field.xtype}"
                 )
 
         if len(votable.resources[0].tables) == 1:
@@ -201,7 +253,9 @@ def import_votable(votable: "VOTableFile", db: DB, table_name: str | None = None
             this_name = f"{table_name}_{i}"
 
         if len(required_field_names) > 0:  # pragma: nocover
-            raise ValueError(f"VOTable import: required fields are missing for table {this_name}")
+            raise ValueError(
+                f"VOTable import: required fields are missing for table {this_name}"
+            )
 
         catalogue: dict[str, Any] = {
             "name": this_name,
@@ -242,7 +296,9 @@ def import_votable(votable: "VOTableFile", db: DB, table_name: str | None = None
             cat.add_events([Event.from_uuid(uuid, db) for uuid in events])
 
 
-def import_votable_file(file_path: str | Path, db: DB, table_name: str | None = None) -> None:
+def import_votable_file(
+    file_path: str | Path, db: DB, table_name: str | None = None
+) -> None:
     """
     Imports a VOTable file into a database.
 
@@ -268,7 +324,9 @@ def import_votable_str(xml_content: str, db: DB, table_name: str | None = None) 
     import_votable(parse(BytesIO(xml_content.encode())), db, table_name=table_name)
 
 
-def export_votable_file(catalogues: Sequence[Catalogue] | Catalogue, file_path: str | Path) -> None:
+def export_votable_file(
+    catalogues: Sequence[Catalogue] | Catalogue, file_path: str | Path
+) -> None:
     """
     Exports catalogues to a VOTable file.
 

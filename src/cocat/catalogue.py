@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
 from json import dumps
-from typing import Any, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from pycrdt import Map
 from simpleeval import SimpleEval  # type: ignore[import-untyped]
@@ -52,39 +52,51 @@ class Catalogue(Mixin):
     def _get(self, name: str) -> Any:
         self._check_deleted()
         value = self._map[name]
-        model = CatalogueModel.__pydantic_validator__.validate_assignment(CatalogueModel.model_construct(), name, value)
+        model = CatalogueModel.__pydantic_validator__.validate_assignment(
+            CatalogueModel.model_construct(), name, value
+        )
         return getattr(model, name)
 
     def _set(self, name: str, value: Any) -> None:
         with self._db.transaction():
             self._check_deleted()
-            model = CatalogueModel.__pydantic_validator__.validate_assignment(CatalogueModel.model_construct(), name, value)
+            model = CatalogueModel.__pydantic_validator__.validate_assignment(
+                CatalogueModel.model_construct(), name, value
+            )
             val = getattr(model, name)
             self._map[name] = val
 
     def _on_change(self, name: str, callback: Callable[[Any], None]) -> None:
         self._check_deleted()
-        self._db._catalogue_change_callbacks[self._uuid][name].append(partial(self._callback, callback))
+        self._db._catalogue_change_callbacks[self._uuid][name].append(
+            partial(self._callback, callback)
+        )
 
     def _on_add(self, field: str, callback: Callable[[Any], None]) -> None:
         self._check_deleted()
-        self._db._catalogue_change_callbacks[self._uuid][f"add_{field}"].append(partial(self._callback, callback))
+        self._db._catalogue_change_callbacks[self._uuid][f"add_{field}"].append(
+            partial(self._callback, callback)
+        )
 
     def _on_remove(self, field: str, callback: Callable[[list[str]], None]) -> None:
         self._check_deleted()
-        self._db._catalogue_change_callbacks[self._uuid][f"remove_{field}"].append(partial(self._callback, callback))
+        self._db._catalogue_change_callbacks[self._uuid][f"remove_{field}"].append(
+            partial(self._callback, callback)
+        )
 
     @classmethod
     def new(cls, model: CatalogueModel, db: "DB") -> Self:
         uuid = str(model.uuid)
-        map = Map(dict(
-            uuid=uuid,
-            name=model.name,
-            author=model.author,
-            tags=Map({val: True for val in model.tags}),
-            events=Map({val: True for val in model.events}),
-            attributes=Map(model.attributes),
-        ))
+        map = Map(
+            dict(
+                uuid=uuid,
+                name=model.name,
+                author=model.author,
+                tags=Map({val: True for val in model.tags}),
+                events=Map({val: True for val in model.events}),
+                attributes=Map(model.attributes),
+            )
+        )
         self = cls(uuid, map, db)
         db._catalogues[uuid] = self
         return self
@@ -142,7 +154,9 @@ class Catalogue(Mixin):
             callback: The callback to call.
         """
         self._check_deleted()
-        self._db._catalogue_delete_callbacks[self._uuid].append(partial(self._callback, callback))
+        self._db._catalogue_delete_callbacks[self._uuid].append(
+            partial(self._callback, callback)
+        )
 
     def delete(self) -> None:
         """
@@ -265,7 +279,10 @@ class Catalogue(Mixin):
         """
         self._check_deleted()
         event_uuids = cast(Map, self._map["events"])
-        return {Event.from_map(self._db._event_maps[uuid], self._db) for uuid in event_uuids.keys()}
+        return {
+            Event.from_map(self._db._event_maps[uuid], self._db)
+            for uuid in event_uuids.keys()
+        }
 
     @events.setter
     def events(self, value: set[Event]) -> None:

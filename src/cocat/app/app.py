@@ -7,12 +7,11 @@ from anyio import sleep_forever
 from anyio.abc import TaskStatus
 from fastapi import Cookie, Depends, FastAPI, WebSocket, WebSocketDisconnect, status
 from fastapi_users import BaseUserManager, models
-from pycrdt import Channel
-from wiredb import Room, RoomManager, connect
+from wiredb import Channel, Room, RoomManager, connect
 
 from .db import create_db_and_tables
 from .schemas import UserCreate, UserRead, UserUpdate
-from .users import auth_backend, fastapi_users, get_user_manager, get_jwt_strategy
+from .users import auth_backend, fastapi_users, get_jwt_strategy, get_user_manager
 
 
 class StoredRoom(Room):
@@ -25,17 +24,22 @@ class StoredRoom(Room):
         await super().run(*args, **kwargs)
 
     async def connect_to_file(self, *, task_status: TaskStatus[None]) -> None:
-        async with connect("file", doc=self.doc, path=f"{Path(self._directory) / self.id.lstrip('/')}.y"):
+        async with connect(
+            "file",
+            doc=self.doc,
+            path=f"{Path(self._directory) / self.id.lstrip('/')}.y",
+        ):
             task_status.started()
             await sleep_forever()
 
 
 class CocatApp:
     def __init__(self, update_dir: str, db_path: str = "./test.db") -> None:
-
         @asynccontextmanager
         async def lifespan(app: FastAPI):
-            async with RoomManager(partial(StoredRoom, update_dir)) as self.room_manager:
+            async with RoomManager(
+                partial(StoredRoom, update_dir)
+            ) as self.room_manager:
                 await create_db_and_tables(db_path)
                 yield
 
@@ -44,13 +48,15 @@ class CocatApp:
         current_superuser = fastapi_users.current_user(active=True, superuser=True)
 
         app.include_router(
-            fastapi_users.get_auth_router(auth_backend), prefix="/auth/jwt", tags=["auth"]
+            fastapi_users.get_auth_router(auth_backend),
+            prefix="/auth/jwt",
+            tags=["auth"],
         )
         app.include_router(
             fastapi_users.get_register_router(UserRead, UserCreate),
             prefix="/auth",
             tags=["auth"],
-            dependencies=[Depends(current_superuser)]
+            dependencies=[Depends(current_superuser)],
         )
         app.include_router(
             fastapi_users.get_reset_password_router(),
@@ -71,7 +77,7 @@ class CocatApp:
         @app.websocket("/room/{id}")
         async def connect_room(
             id: str,
-            websocket = Depends(websocket_auth),
+            websocket=Depends(websocket_auth),
         ):
             if websocket is None:
                 return
@@ -114,8 +120,8 @@ class YWebSocket(Channel):
         except WebSocketDisconnect:
             raise StopAsyncIteration()
 
-    async def send(self, message: bytes) -> None:
+    async def asend(self, message: bytes) -> None:
         await self._websocket.send_bytes(message)
 
-    async def recv(self) -> bytes:
+    async def arecv(self) -> bytes:
         return await self._websocket.receive_bytes()

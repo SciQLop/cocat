@@ -9,6 +9,7 @@ class EventModel(BaseModel):
     """
     The [pydantic](https://docs.pydantic.dev) model for event validation.
     """
+
     uuid: UUID = Field(default_factory=lambda: uuid4())
     start: datetime
     stop: datetime
@@ -23,6 +24,7 @@ class CatalogueModel(BaseModel):
     """
     The [pydantic](https://docs.pydantic.dev) model for catalogue validation.
     """
+
     uuid: UUID = Field(default_factory=lambda: uuid4())
     name: str
     author: str

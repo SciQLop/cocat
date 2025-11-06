@@ -119,6 +119,15 @@ def test_event():
     range_values.clear()
     event0.range = "2025-01-27", "2026-01-26"
     assert range_values == [(datetime(2025, 1, 27, 0, 0), datetime(2026, 1, 26, 0, 0))]
+    range_values.clear()
+    event0.range = "2025-01-26", "2026-01-26"
+    assert range_values == [(datetime(2025, 1, 26, 0, 0), datetime(2026, 1, 26, 0, 0))]
+    range_values.clear()
+    event0.start = "2025-01-25"
+    assert range_values == [(datetime(2025, 1, 25, 0, 0), datetime(2026, 1, 26, 0, 0))]
+    range_values.clear()
+    event0.stop = "2026-01-25"
+    assert range_values == [(datetime(2025, 1, 25, 0, 0), datetime(2026, 1, 25, 0, 0))]
 
     values.clear()
     event1.on_change_author(callback)

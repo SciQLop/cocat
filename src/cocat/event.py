@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
 from json import dumps
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pycrdt import Map
 
@@ -46,13 +46,19 @@ class Event(Mixin):
     def _get(self, name: str) -> Any:
         self._check_deleted()
         value = self._map[name]
-        model = EventModel.__pydantic_validator__.validate_assignment(EventModel.model_construct(), name, value)
+        model = EventModel.__pydantic_validator__.validate_assignment(
+            EventModel.model_construct(), name, value
+        )
         return getattr(model, name)
 
-    def _set(self, name: str, value: Any, func: Callable[[Any], Any] | None = None) -> None:
+    def _set(
+        self, name: str, value: Any, func: Callable[[Any], Any] | None = None
+    ) -> None:
         with self._db.transaction():
             self._check_deleted()
-            model = EventModel.__pydantic_validator__.validate_assignment(EventModel.model_construct(), name, value)
+            model = EventModel.__pydantic_validator__.validate_assignment(
+                EventModel.model_construct(), name, value
+            )
             val = getattr(model, name)
             if func is not None:
                 val = func(val)
@@ -60,29 +66,37 @@ class Event(Mixin):
 
     def _on_change(self, name: str, callback: Callable[[Any], None]) -> None:
         self._check_deleted()
-        self._db._event_change_callbacks[self._uuid][name].append(partial(self._callback, callback))
+        self._db._event_change_callbacks[self._uuid][name].append(
+            partial(self._callback, callback)
+        )
 
     def _on_add(self, field: str, callback: Callable[[Any], None]) -> None:
         self._check_deleted()
-        self._db._event_change_callbacks[self._uuid][f"add_{field}"].append(partial(self._callback, callback))
+        self._db._event_change_callbacks[self._uuid][f"add_{field}"].append(
+            partial(self._callback, callback)
+        )
 
     def _on_remove(self, field: str, callback: Callable[[list[str]], None]) -> None:
         self._check_deleted()
-        self._db._event_change_callbacks[self._uuid][f"remove_{field}"].append(partial(self._callback, callback))
+        self._db._event_change_callbacks[self._uuid][f"remove_{field}"].append(
+            partial(self._callback, callback)
+        )
 
     @classmethod
     def new(cls, model: EventModel, db: "DB") -> Self:
         uuid = str(model.uuid)
-        map = Map(dict(
-            uuid=uuid,
-            start=str(model.start),
-            stop=str(model.stop),
-            author=model.author,
-            tags=Map({val: True for val in model.tags}),
-            products=Map({val: True for val in model.products}),
-            rating=model.rating,
-            attributes=Map(model.attributes),
-        ))
+        map = Map(
+            dict(
+                uuid=uuid,
+                start=str(model.start),
+                stop=str(model.stop),
+                author=model.author,
+                tags=Map({val: True for val in model.tags}),
+                products=Map({val: True for val in model.products}),
+                rating=model.rating,
+                attributes=Map(model.attributes),
+            )
+        )
         self = cls(uuid, map, db)
         db._events[uuid] = self
         return self
@@ -180,7 +194,9 @@ class Event(Mixin):
             callback: The callback to call.
         """
         self._check_deleted()
-        self._db._event_delete_callbacks[self._uuid].append(partial(self._callback, callback))
+        self._db._event_delete_callbacks[self._uuid].append(
+            partial(self._callback, callback)
+        )
 
     def delete(self):
         """
