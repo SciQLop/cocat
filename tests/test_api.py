@@ -117,7 +117,10 @@ async def test_login(tmp_path, server, anyio_backend):
 
 
 @pytest.mark.skipif(
-    platform.system == "Windows", reason="Pexpect doesn't work on Windows"
+    not (
+        platform.system == "Darwin" and (platform.python_version().startswith("3.14."))
+    ),
+    reason="Only works on macos/py3.14",
 )
 def test_atexit(server, user, tmp_path):
     host, port = server
