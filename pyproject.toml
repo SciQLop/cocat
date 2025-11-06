@@ -50,6 +50,7 @@ test = [
   "trio",
   "requests",
   "astropy",
+  "pexpect",
 ]
 docs = [
   "mkdocs",
