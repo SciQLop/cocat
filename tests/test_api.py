@@ -1,4 +1,5 @@
 import os
+import platform
 import signal
 
 import httpx
@@ -115,6 +116,7 @@ async def test_login(tmp_path, server, anyio_backend):
         refresh()
 
 
+@pytest.mark.skipif(platform.system == "Windows", reason="Pexpect doesn't work on Windows")
 def test_atexit(server, user, tmp_path):
     host, port = server
     username, password = user
