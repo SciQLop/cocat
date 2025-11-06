@@ -118,7 +118,7 @@ async def test_login(tmp_path, server, anyio_backend):
 
 @pytest.mark.skipif(
     not (
-        platform.system == "Darwin" and (platform.python_version().startswith("3.14."))
+        platform.system() == "Darwin" and platform.python_version().startswith("3.14.")
     ),
     reason="Only works on macos/py3.14",
 )
