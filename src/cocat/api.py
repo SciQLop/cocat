@@ -1,14 +1,19 @@
 from asyncio import Task, create_task
 from collections.abc import Iterable
 from datetime import datetime
-from typing import Any
+from pathlib import Path
+from typing import Any, Sequence
 from uuid import UUID
 
 import anyio
 import httpx
 from wiredb import connect as wire_connect
 
-from cocat import DB, Catalogue, Event
+from .catalogue import Catalogue
+from .db import DB
+from .event import Event
+from .votable import export_votable_file as _export_votable_file
+from .votable import import_votable_file as _import_votable_file
 
 
 class Session:
@@ -238,3 +243,29 @@ def save() -> None:
     """
     SESSION.check_connected()
     SESSION.client.push()
+
+
+def import_votable_file(
+    file_path: str | Path, table_name: str | None = None
+) -> set[Catalogue]:  # pragma: nocover
+    """
+    Imports a VOTable file into the database.
+
+    Args:
+        file_path: The VOTable file path.
+    """
+    _import_votable_file(file_path, SESSION.db, table_name=table_name)
+    return SESSION.db.catalogues
+
+
+def export_votable_file(
+    catalogues: Sequence[Catalogue] | Catalogue, file_path: str | Path
+) -> None:  # pragma: nocover
+    """
+    Exports catalogues to a VOTable file.
+
+    Args:
+        catalogues: The catalogue(s) to export.
+        file_path: The path to the exported file.
+    """
+    _export_votable_file(catalogues, file_path)

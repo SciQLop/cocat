@@ -65,8 +65,11 @@ async def _serve(host: str, port: int, update_dir: str, db_path: str):
     try:
         cocat_app = CocatApp(update_dir, db_path)
         await anycorn_serve(
-            cocat_app.app, config, shutdown_trigger=shutdown_event.wait, mode="asgi"
-        )  # type: ignore[arg-type]
+            cocat_app.app,  # type: ignore[arg-type]
+            config,
+            shutdown_trigger=shutdown_event.wait,
+            mode="asgi",
+        )
     except Exception:
         shutdown_event.set()
 

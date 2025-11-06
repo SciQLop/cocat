@@ -38,7 +38,7 @@ class Catalogue(Mixin):
         if not isinstance(other, Catalogue):
             return NotImplemented
 
-        return self._uuid == other._uuid
+        return self.to_dict() == other.to_dict()
 
     def __repr__(self) -> str:
         return dumps(self.to_dict())
@@ -123,8 +123,8 @@ class Catalogue(Mixin):
         self._check_deleted()
         dct = self._map.to_py()
         assert dct is not None
-        dct["tags"] = list(dct["tags"].keys())
-        dct["events"] = list(dct["events"].keys())
+        dct["tags"] = list(sorted(dct["tags"].keys()))
+        dct["events"] = list(sorted(dct["events"].keys()))
         dct["attributes"] = dict(sorted(dct["attributes"].items()))
         return dict(sorted(dct.items()))
 

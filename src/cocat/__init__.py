@@ -15,3 +15,7 @@ from .db import DB as DB
 from .event import Event as Event
 from .models import CatalogueModel as CatalogueModel
 from .models import EventModel as EventModel
+from .votable import export_votable_file as export_votable_file
+from .votable import export_votable_str as export_votable_str
+from .votable import import_votable_file as import_votable_file
+from .votable import import_votable_str as import_votable_str
