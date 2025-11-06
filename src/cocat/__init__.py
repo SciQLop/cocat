@@ -12,3 +12,7 @@ from .api import log_out as log_out
 from .api import save_catalogue as save_catalogue
 from .api import save_event as save_event
 from .api import set_config as set_config
+from .votable import export_votable_str as export_votable_str
+from .votable import export_votable_file as export_votable_file
+from .votable import import_votable_str as import_votable_str
+from .votable import import_votable_file as import_votable_file
