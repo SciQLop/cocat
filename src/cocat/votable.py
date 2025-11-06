@@ -33,7 +33,7 @@ class _VOTableCocatField:
                 return False
         return True
 
-    def make_vot_field(self, table: Table, name: str) -> "VOField":
+    def make_vot_field(self, table: "Table", name: str) -> "VOField":
         from astropy.io.votable.tree import Field as VOField
 
         if "name" not in self.attr:
