@@ -122,7 +122,7 @@ async def test_login(tmp_path, server, anyio_backend):
     ),
     reason="Only works on macos/py3.14",
 )
-def test_atexit(server, user, tmp_path):
+def test_atexit(server, user, tmp_path):  # pragma: nocover
     host, port = server
     username, password = user
     repl = pexpect.spawn(
