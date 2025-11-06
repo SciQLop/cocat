@@ -1,5 +1,10 @@
 # Version history
 
+## 0.5.0
+
+- Refactor user API.
+- Add support for VOTable import/export.
+
 ## 0.4.2
 
 - Add `range` getter/setter and `on_change_range`.
