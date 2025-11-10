@@ -1,14 +1,14 @@
 import atexit
-from asyncio import Task, create_task, get_event_loop
 from collections.abc import Iterable
+from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Sequence
 from uuid import UUID
 
-import anyio
 import httpx
-from wiredb import connect as wire_connect
+from wire_file import FileClient
+from wire_websocket import WebSocketClient
 
 from .catalogue import Catalogue
 from .db import DB
@@ -30,34 +30,30 @@ class Session:
         self.file_path = file_path
         self.room_id = room_id
         self.db = DB()
-        self.task: Task | None = None
         self.connected = False
-        self.send_stream, self.receive_stream = anyio.create_memory_object_stream()
+        self.exit_stack: ExitStack | None = None
 
     def check_connected(self) -> None:
         if not self.connected:
             raise RuntimeError("Not logged in")
 
-    async def connect(self) -> None:
-        try:
-            async with wire_connect(
-                "websocket",
-                id=f"room/{self.room_id}",
-                doc=self.db.doc,
-                auto_update=False,
-                host=self.host,
-                port=self.port,
-                cookies=self.cookies,
-            ) as self.client:
-                async with wire_connect(
-                    "file", doc=self.db.doc, path=self.file_path
-                ) as self.file:
-                    atexit.register(save_on_exit)
-                    self.connected = True
-                    await self.send_stream.send(None)
-                    await anyio.sleep_forever()
-        except Exception as exc:
-            await self.send_stream.send(exc)
+    def connect(self) -> None:
+        with ExitStack() as exit_stack:
+            self.client = exit_stack.enter_context(
+                WebSocketClient(
+                    id=f"room/{self.room_id}",
+                    doc=self.db.doc,
+                    host=self.host,
+                    port=self.port,
+                    cookies=self.cookies,
+                )
+            )
+            self.file = exit_stack.enter_context(
+                FileClient(doc=self.db.doc, path=self.file_path)
+            )
+            self.exit_stack = exit_stack.pop_all()
+            atexit.register(save_on_exit)
+            self.connected = True
 
 
 SESSION = Session()
@@ -89,29 +85,19 @@ def set_config(
         SESSION.room_id = room_id
 
 
-async def wait_connected() -> None:
-    """
-    Wait for the connection to be established with the server.
-    """
-    res = await SESSION.receive_stream.receive()
-    if res is not None:
-        raise res
-
-
-async def synchronize() -> None:
+def synchronize() -> None:
     """
     Does the initial synchronization of the client with other peers.
     """
-    await wait_connected()
+    SESSION.check_connected()
     SESSION.client.pull()
-    await SESSION.client.synchronized.wait()
 
 
 def connect() -> None:
     """
     Launches the connection with the server in the background.
     """
-    SESSION.task = create_task(SESSION.connect())
+    SESSION.connect()
 
 
 def log_in(username: str, password: str) -> None:
@@ -138,11 +124,9 @@ def log_out() -> None:
         f"{SESSION.host}:{SESSION.port}/auth/jwt/logout", cookies=SESSION.cookies
     )
     SESSION.cookies = httpx.Cookies()
-    assert SESSION.task is not None
-    SESSION.task.cancel()
-    SESSION.task = None
     SESSION.connected = False
-    SESSION.send_stream, SESSION.receive_stream = anyio.create_memory_object_stream()
+    if SESSION.exit_stack is not None:
+        SESSION.exit_stack.close()
 
 
 def create_catalogue(
@@ -285,6 +269,6 @@ def save_on_exit() -> None:
     response = input("Save changes (Y/n)? ")
     if not response or response.lower().startswith("y"):
         save()
-        loop = get_event_loop()
-        loop.run_until_complete(anyio.wait_all_tasks_blocked())
-        print("Changes have been saved.")
+        if SESSION.exit_stack is not None:
+            SESSION.exit_stack.__exit__(None, None, None)
+            print("Changes have been saved.")

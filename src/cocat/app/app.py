@@ -7,7 +7,8 @@ from anyio import sleep_forever
 from anyio.abc import TaskStatus
 from fastapi import Cookie, Depends, FastAPI, WebSocket, WebSocketDisconnect, status
 from fastapi_users import BaseUserManager, models
-from wiredb import Channel, Room, RoomManager, connect
+from wire_file import AsyncFileClient
+from wiredb import AsyncChannel, Room, RoomManager
 
 from .db import create_db_and_tables
 from .schemas import UserCreate, UserRead, UserUpdate
@@ -24,8 +25,7 @@ class StoredRoom(Room):
         await super().run(*args, **kwargs)
 
     async def connect_to_file(self, *, task_status: TaskStatus[None]) -> None:
-        async with connect(
-            "file",
+        async with AsyncFileClient(
             doc=self.doc,
             path=f"{Path(self._directory) / self.id.lstrip('/')}.y",
         ):
@@ -84,7 +84,7 @@ class CocatApp:
 
             await websocket.accept()
             ywebsocket = YWebSocket(websocket, id)
-            room = await self.room_manager.get_room(ywebsocket.path)
+            room = await self.room_manager.get_room(ywebsocket.id)
             await room.serve(ywebsocket)
 
 
@@ -105,13 +105,13 @@ async def websocket_auth(
     return None
 
 
-class YWebSocket(Channel):
+class YWebSocket(AsyncChannel):
     def __init__(self, websocket: WebSocket, path: str) -> None:
         self._websocket = websocket
         self._path = path
 
     @property
-    def path(self) -> str:
+    def id(self) -> str:
         return self._path
 
     async def __anext__(self):
@@ -120,8 +120,8 @@ class YWebSocket(Channel):
         except WebSocketDisconnect:
             raise StopAsyncIteration()
 
-    async def asend(self, message: bytes) -> None:
+    async def send(self, message: bytes) -> None:
         await self._websocket.send_bytes(message)
 
-    async def arecv(self) -> bytes:
+    async def receive(self) -> bytes:
         return await self._websocket.receive_bytes()
