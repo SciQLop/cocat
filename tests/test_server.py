@@ -3,7 +3,8 @@ from uuid import uuid4
 import httpx
 import pytest
 from anyio import fail_after, sleep
-from wiredb import bind, connect
+from wire_file import AsyncFileClient
+from wire_websocket import AsyncWebSocketClient, AsyncWebSocketServer
 
 from cocat import DB
 
@@ -12,15 +13,15 @@ pytestmark = pytest.mark.anyio
 
 async def test_websocket(free_tcp_port, tmp_path):
     update_path = tmp_path / "updates.y"
-    async with bind("websocket", host="localhost", port=free_tcp_port):
+    async with AsyncWebSocketServer(host="localhost", port=free_tcp_port):
         async with (
-            connect(
-                "websocket", host="http://localhost", port=free_tcp_port
+            AsyncWebSocketClient(
+                host="http://localhost", port=free_tcp_port
             ) as client0,
-            connect(
-                "websocket", host="http://localhost", port=free_tcp_port
+            AsyncWebSocketClient(
+                host="http://localhost", port=free_tcp_port
             ) as client1,
-            connect("file", doc=client0.doc, path=update_path),
+            AsyncFileClient(doc=client0.doc, path=update_path),
         ):
             db0 = DB(doc=client0.doc)
             db1 = DB(doc=client1.doc)
@@ -70,13 +71,14 @@ async def test_websocket(free_tcp_port, tmp_path):
             await sleep(0.1)
 
     db2 = DB()
-    async with connect("file", doc=db2.doc, path=update_path):
+    async with AsyncFileClient(doc=db2.doc, path=update_path):
         pass
     assert db2.events == {event0, event1}
     assert db2.catalogues == {catalogue1}
 
 
 async def test_origin(server, user):
+    print(server)
     host, port = server
     username, password = user
     data = {"username": username, "password": password}
@@ -85,15 +87,13 @@ async def test_origin(server, user):
     cookies = httpx.Cookies()
     cookies.set("fastapiusersauth", cookie)
     async with (
-        connect(
-            "websocket",
+        AsyncWebSocketClient(
             id="room/myroom",
             host=f"http://{host}",
             port=port,
             cookies=cookies,
         ) as client0,
-        connect(
-            "websocket",
+        AsyncWebSocketClient(
             id="room/myroom",
             host=f"http://{host}",
             port=port,

@@ -1,7 +1,7 @@
 import pytest
 from anyio import sleep
 from pycrdt import Doc, Text
-from wiredb import connect
+from wire_file import AsyncFileClient
 
 pytestmark = pytest.mark.anyio
 
@@ -9,7 +9,7 @@ pytestmark = pytest.mark.anyio
 async def test_file_without_write_delay(tmp_path):
     update_path = tmp_path / "updates.y"
     doc = Doc()
-    async with connect("file", doc=doc, path=update_path, write_delay=0):
+    async with AsyncFileClient(doc=doc, path=update_path, write_delay=0):
         text = doc.get("text", type=Text)
         text += "Hello"
         await sleep(0.1)
@@ -19,7 +19,7 @@ async def test_file_without_write_delay(tmp_path):
 async def test_file_with_write_delay(tmp_path):
     update_path = tmp_path / "updates.y"
     doc = Doc()
-    async with connect("file", doc=doc, path=update_path, write_delay=0.1):
+    async with AsyncFileClient(doc=doc, path=update_path, write_delay=0.1):
         text = doc.get("text", type=Text)
         for i in range(20):
             text += "."

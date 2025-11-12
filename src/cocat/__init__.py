@@ -9,7 +9,6 @@ from .api import refresh as refresh
 from .api import save as save
 from .api import set_config as set_config
 from .api import synchronize as synchronize
-from .api import wait_connected as wait_connected
 from .catalogue import Catalogue as Catalogue
 from .db import DB as DB
 from .event import Event as Event

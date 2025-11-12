@@ -33,7 +33,7 @@ jobs:
 
     - name: Install cocat
       run: |
-        pip install ".[server]" --group test
+        pip install -e ".[server]" --group test
 
     - name: Check types
       run: |
