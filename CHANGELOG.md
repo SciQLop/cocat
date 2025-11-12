@@ -1,5 +1,9 @@
 # Version history
 
+## 0.6.0
+
+- Use `wiredb`'s v0.7 synchronous clients in user API.
+
 ## 0.5.0
 
 - Refactor user API.
