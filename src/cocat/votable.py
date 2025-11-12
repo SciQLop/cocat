@@ -293,7 +293,7 @@ def import_votable(
         for _catalogue in db_dict["catalogues"]:
             events = _catalogue.pop("events", [])
             cat = db.create_catalogue(**_catalogue)
-            cat.add_events([Event.from_uuid(uuid, db) for uuid in events])
+            cat.add_events([Event._from_uuid(uuid, db) for uuid in events])
 
 
 def import_votable_file(

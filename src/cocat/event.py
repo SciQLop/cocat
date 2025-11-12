@@ -83,7 +83,7 @@ class Event(Mixin):
         )
 
     @classmethod
-    def new(cls, model: EventModel, db: "DB") -> Self:
+    def _new(cls, model: EventModel, db: "DB") -> Self:
         uuid = str(model.uuid)
         map = Map(
             dict(
@@ -102,14 +102,14 @@ class Event(Mixin):
         return self
 
     @classmethod
-    def from_map(cls, map: Map, db: "DB") -> Self:
+    def _from_map(cls, map: Map, db: "DB") -> Self:
         uuid = map["uuid"]
         self = cls(uuid, map, db)
         db._events[uuid] = self
         return self
 
     @classmethod
-    def from_uuid(cls, uuid: str, db: "DB") -> Self:
+    def _from_uuid(cls, uuid: str, db: "DB") -> Self:
         map = db._event_maps[uuid]
         self = cls(uuid, map, db)
         db._events[uuid] = self
