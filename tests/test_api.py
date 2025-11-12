@@ -4,13 +4,11 @@ import time
 
 import httpx
 import pytest
-from httpx_ws import WebSocketUpgradeError
 from wire_websocket import WebSocketClient
 
 import cocat.api
 from cocat import (
     DB,
-    connect,
     create_catalogue,
     create_event,
     get_catalogue,
@@ -20,7 +18,6 @@ from cocat import (
     refresh,
     save,
     set_config,
-    synchronize,
 )
 
 
@@ -51,7 +48,6 @@ def test_api(tmp_path, server, user, monkeypatch):
                 room_id="room1",
             )
             log_in(*user)
-            synchronize()
 
             catalogue0 = create_catalogue(name="cat0", author="Paul")
             event0 = create_event(
@@ -98,8 +94,8 @@ def test_api(tmp_path, server, user, monkeypatch):
 
         log_out()
 
-        with pytest.raises(WebSocketUpgradeError):
-            connect()
+        with pytest.raises(RuntimeError, match="Wrong username or password"):
+            log_in("foo", "bar")
 
 
 def test_login(tmp_path, server, monkeypatch):
@@ -128,7 +124,6 @@ def test_atexit(server, user, tmp_path, monkeypatch, capsys):
             host=f"http://{host}", port=port, file_path=file_path, room_id="room1"
         )
         log_in(username, password)
-        synchronize()
         create_catalogue(name="cat0", author="Paul Newton")
         cocat.api.save_on_exit()
         captured = capsys.readouterr()
