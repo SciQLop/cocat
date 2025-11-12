@@ -144,6 +144,29 @@ def test_catalogue():
     assert str(excinfo.value) == "Catalogue has been deleted"
 
 
+def test_iterate_catalogue():
+    db = DB()
+
+    catalogue = db.create_catalogue(
+        name="cat0", author="John", attributes={"foo": "bar"}
+    )
+
+    events = [
+        db.create_event(
+            start="2025-01-31",
+            stop="2026-01-31",
+            author="Paul",
+        ),
+        db.create_event(
+            start="2027-01-31",
+            stop="2028-01-31",
+            author="Mike",
+        ),
+    ]
+    catalogue.add_events(events)
+    assert set(catalogue) == set(events)
+
+
 def test_dynamic_catalogue():
     db = DB()
 
