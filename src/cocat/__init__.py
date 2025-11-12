@@ -1,4 +1,3 @@
-from .api import connect as connect
 from .api import create_catalogue as create_catalogue
 from .api import create_event as create_event
 from .api import get_catalogue as get_catalogue
@@ -8,7 +7,6 @@ from .api import log_out as log_out
 from .api import refresh as refresh
 from .api import save as save
 from .api import set_config as set_config
-from .api import synchronize as synchronize
 from .catalogue import Catalogue as Catalogue
 from .db import DB as DB
 from .event import Event as Event

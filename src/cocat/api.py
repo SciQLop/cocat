@@ -51,9 +51,11 @@ class Session:
             self.file = exit_stack.enter_context(
                 FileClient(doc=self.db.doc, path=self.file_path)
             )
+            self.client.pull()
+            self.file.pull()
             self.exit_stack = exit_stack.pop_all()
-            atexit.register(save_on_exit)
             self.connected = True
+            atexit.register(save_on_exit)
 
 
 SESSION = Session()
@@ -85,21 +87,6 @@ def set_config(
         SESSION.room_id = room_id
 
 
-def synchronize() -> None:
-    """
-    Does the initial synchronization of the client with other peers.
-    """
-    SESSION.check_connected()
-    SESSION.client.pull()
-
-
-def connect() -> None:
-    """
-    Launches the connection with the server in the background.
-    """
-    SESSION.connect()
-
-
 def log_in(username: str, password: str) -> None:
     """
     Log into the server.
@@ -111,9 +98,10 @@ def log_in(username: str, password: str) -> None:
     data = {"username": username, "password": password}
     response = httpx.post(f"{SESSION.host}:{SESSION.port}/auth/jwt/login", data=data)
     cookie = response.cookies.get("fastapiusersauth")
-    assert cookie is not None
+    if cookie is None:
+        raise RuntimeError("Wrong username or password")
     SESSION.cookies.set("fastapiusersauth", cookie)
-    connect()
+    SESSION.connect()
 
 
 def log_out() -> None:
@@ -266,9 +254,10 @@ def export_votable(
 
 
 def save_on_exit() -> None:
-    response = input("Save changes (Y/n)? ")
-    if not response or response.lower().startswith("y"):
-        save()
-        if SESSION.exit_stack is not None:
-            SESSION.exit_stack.__exit__(None, None, None)
-            print("Changes have been saved.")
+    if SESSION.connected:
+        response = input("Save changes (Y/n)? ")
+        if not response or response.lower().startswith("y"):
+            save()
+            if SESSION.exit_stack is not None:
+                SESSION.exit_stack.close()
+                print("Changes have been saved.")
