@@ -103,7 +103,7 @@ class DB:
         Returns:
             The created database.
         """
-        return DB.from_dict(json.loads(data))
+        return DB.from_dict(json.loads(data), doc)
 
     @property
     def doc(self) -> Doc:
@@ -176,7 +176,7 @@ class DB:
                                 callback(transaction.origin, set(removed_uuids))
                         if added_uuids:
                             result = {
-                                Event.from_map(self._event_maps[added_uuid], self)
+                                Event._from_map(self._event_maps[added_uuid], self)
                                 for added_uuid in added_uuids
                             }
                             callbacks = self._catalogue_change_callbacks[uuid][
@@ -273,7 +273,7 @@ class DB:
             The catalogues in the database.
         """
         return {
-            Catalogue.from_map(catalogue, self)
+            Catalogue._from_map(catalogue, self)
             for catalogue in self._catalogue_maps.values()
         }
 
@@ -283,7 +283,7 @@ class DB:
         Returns:
             The events in the database.
         """
-        return {Event.from_map(event, self) for event in self._event_maps.values()}
+        return {Event._from_map(event, self) for event in self._event_maps.values()}
 
     def create_catalogue(
         self,
@@ -321,7 +321,7 @@ class DB:
             if attributes is not None:
                 kwargs["attributes"] = attributes
             model = CatalogueModel(**kwargs)
-            catalogue = Catalogue.new(model, self)
+            catalogue = Catalogue._new(model, self)
             self._catalogue_maps[str(model.uuid)] = catalogue._map
             if events is not None:
                 if isinstance(events, Event):
@@ -375,7 +375,7 @@ class DB:
             if rating is not None:
                 kwargs["rating"] = rating
             model = EventModel(**kwargs)
-            event = Event.new(model, self)
+            event = Event._new(model, self)
             self._event_maps[str(model.uuid)] = event._map
             return event
 
@@ -407,11 +407,11 @@ class DB:
         """
         uuid_or_name = str(uuid_or_name)
         try:
-            catalogue = Catalogue.from_uuid(uuid_or_name, self)
+            catalogue = Catalogue._from_uuid(uuid_or_name, self)
         except KeyError:
             for uuid in self._catalogue_maps:
                 if self._catalogue_maps[uuid]["name"] == uuid_or_name:
-                    catalogue = Catalogue.from_uuid(uuid, self)
+                    catalogue = Catalogue._from_uuid(uuid, self)
                     break
             else:
                 raise RuntimeError(
@@ -429,7 +429,7 @@ class DB:
         """
         uuid = str(uuid)
         try:
-            return Event.from_uuid(uuid, self)
+            return Event._from_uuid(uuid, self)
         except KeyError:
             raise RuntimeError(f"No event found with UUID: {uuid}")
 

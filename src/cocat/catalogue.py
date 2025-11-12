@@ -85,7 +85,7 @@ class Catalogue(Mixin):
         )
 
     @classmethod
-    def new(cls, model: CatalogueModel, db: "DB") -> Self:
+    def _new(cls, model: CatalogueModel, db: "DB") -> Self:
         uuid = str(model.uuid)
         map = Map(
             dict(
@@ -102,14 +102,14 @@ class Catalogue(Mixin):
         return self
 
     @classmethod
-    def from_map(cls, map: Map, db: "DB") -> Self:
+    def _from_map(cls, map: Map, db: "DB") -> Self:
         uuid = map["uuid"]
         self = cls(uuid, map, db)
         db._catalogues[uuid] = self
         return self
 
     @classmethod
-    def from_uuid(cls, uuid: str, db: "DB") -> Self:
+    def _from_uuid(cls, uuid: str, db: "DB") -> Self:
         map = db._catalogue_maps[uuid]
         self = cls(uuid, map, db)
         db._catalogues[uuid] = self
@@ -280,7 +280,7 @@ class Catalogue(Mixin):
         self._check_deleted()
         event_uuids = cast(Map, self._map["events"])
         return {
-            Event.from_map(self._db._event_maps[uuid], self._db)
+            Event._from_map(self._db._event_maps[uuid], self._db)
             for uuid in event_uuids.keys()
         }
 
