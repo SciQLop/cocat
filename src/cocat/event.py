@@ -1,5 +1,5 @@
 import sys
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Generator, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
@@ -42,6 +42,10 @@ class Event(Mixin):
 
     def __hash__(self) -> int:
         return hash(self._uuid)
+
+    def __iter__(self) -> Generator[datetime]:
+        yield self.start
+        yield self.stop
 
     def _get(self, name: str) -> Any:
         self._check_deleted()

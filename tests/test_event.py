@@ -169,3 +169,13 @@ def test_event():
     with pytest.raises(RuntimeError) as excinfo:
         event0.author = "Paul"
     assert str(excinfo.value) == "Event has been deleted"
+
+
+def test_iterate_event():
+    db = DB()
+    event = db.create_event(
+        start="2025-01-31",
+        stop="2026-01-31",
+        author="John",
+    )
+    assert list(event) == [datetime(2025, 1, 31, 0, 0), datetime(2026, 1, 31, 0, 0)]

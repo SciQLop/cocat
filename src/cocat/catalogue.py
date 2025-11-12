@@ -1,5 +1,5 @@
 import sys
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Generator, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
@@ -48,6 +48,11 @@ class Catalogue(Mixin):
 
     def __contains__(self, event: Event) -> bool:
         return str(event.uuid) in self._map["events"]
+
+    def __iter__(self) -> Generator[Event]:
+        uuids = sorted(self._map["events"].keys())
+        for uuid in uuids:
+            yield self._db.get_event(uuid)
 
     def _get(self, name: str) -> Any:
         self._check_deleted()
