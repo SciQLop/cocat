@@ -1,5 +1,12 @@
 # Version history
 
+## 0.7.0
+
+- Use `rich`'s pretty representations.
+- Make `Catalogue` and `Event` iterable.
+- Remove `synchronize` and `connect` from user API.
+- Make some class methods private.
+
 ## 0.6.0
 
 - Use `wiredb`'s v0.7 synchronous clients in user API.
