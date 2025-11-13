@@ -3,10 +3,11 @@ from collections.abc import Callable, Generator, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
-from json import dumps
 from typing import TYPE_CHECKING, Any
 
 from pycrdt import Map
+from rich.console import Console
+from rich.pretty import pprint
 
 from .base import Mixin
 from .models import EventModel
@@ -38,7 +39,10 @@ class Event(Mixin):
         return self.to_dict() == other.to_dict()
 
     def __repr__(self) -> str:
-        return dumps(self.to_dict())
+        console = Console()
+        with console.capture() as capture:
+            pprint(self.to_dict(), console=console, max_length=8)
+        return capture.get()
 
     def __hash__(self) -> int:
         return hash(self._uuid)
@@ -130,7 +134,7 @@ class Event(Mixin):
         dct["tags"] = list(sorted(dct["tags"].keys()))
         dct["products"] = list(sorted(dct["products"].keys()))
         dct["attributes"] = dict(sorted(dct["attributes"].items()))
-        return dict(sorted(dct.items()))
+        return {key: dct[key] for key in EventModel.model_fields.keys()}
 
     def on_change_author(self, callback: Callable[[Any], None]) -> None:
         """

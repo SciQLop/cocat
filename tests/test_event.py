@@ -1,5 +1,4 @@
 from datetime import datetime
-from json import loads
 
 import pytest
 
@@ -28,17 +27,6 @@ def test_event():
         rating=3,
     )
     assert event1 == event0
-
-    assert loads(repr(event1)) == {
-        "uuid": str(event0.uuid),
-        "author": "John",
-        "products": [],
-        "rating": 3,
-        "start": "2025-01-31 00:00:00",
-        "stop": "2026-01-31 00:00:00",
-        "tags": [],
-        "attributes": {"foo": "bar"},
-    }
 
     assert event1.uuid == event0.uuid
 
@@ -169,6 +157,32 @@ def test_event():
     with pytest.raises(RuntimeError) as excinfo:
         event0.author = "Paul"
     assert str(excinfo.value) == "Event has been deleted"
+
+
+def test_event_repr():
+    db = DB()
+
+    event = db.create_event(
+        uuid="7788cbfa-caed-4f05-892e-26e01e259160",
+        start=datetime(2025, 1, 1),
+        stop=datetime(2026, 1, 1),
+        author="Paul",
+    )
+    assert (
+        repr(event)
+        == """\
+{
+│   'uuid': '7788cbfa-caed-4f05-892e-26e01e259160',
+│   'start': '2025-01-01 00:00:00',
+│   'stop': '2026-01-01 00:00:00',
+│   'author': 'Paul',
+│   'products': [],
+│   'rating': None,
+│   'tags': [],
+│   'attributes': {}
+}
+"""
+    )
 
 
 def test_iterate_event():

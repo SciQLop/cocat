@@ -14,9 +14,9 @@ class EventModel(BaseModel):
     start: datetime
     stop: datetime
     author: str
-    tags: list[str] = Field(default_factory=list)
     products: list[str] = Field(default_factory=list)
     rating: int | None = None
+    tags: list[str] = Field(default_factory=list)
     attributes: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -29,5 +29,5 @@ class CatalogueModel(BaseModel):
     name: str
     author: str
     tags: list[str] = Field(default_factory=list)
-    events: list[str] = Field(default_factory=list)
     attributes: dict[str, Any] = Field(default_factory=dict)
+    events: list[str] = Field(default_factory=list)
