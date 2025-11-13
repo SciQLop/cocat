@@ -3,15 +3,16 @@ from collections.abc import Callable, Generator, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
-from json import dumps
 from typing import TYPE_CHECKING, Any, cast
 
 from pycrdt import Map
+from rich.console import Console
+from rich.pretty import pprint
 from simpleeval import SimpleEval  # type: ignore[import-untyped]
 
 from .base import Mixin
 from .event import Event
-from .models import CatalogueModel
+from .models import CatalogueModel, EventModel
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -41,7 +42,10 @@ class Catalogue(Mixin):
         return self.to_dict() == other.to_dict()
 
     def __repr__(self) -> str:
-        return dumps(self.to_dict())
+        console = Console()
+        with console.capture() as capture:
+            pprint(self.to_dict(), console=console, max_length=8)
+        return capture.get()
 
     def __hash__(self) -> int:
         return hash(self._uuid)
@@ -120,8 +124,11 @@ class Catalogue(Mixin):
         db._catalogues[uuid] = self
         return self
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, event_as_uuid: bool = False) -> dict[str, Any]:
         """
+        Args:
+            event_as_uuid: Whether to convert events to their UUID or keep their full content.
+
         Returns:
             The catalogue as a dictionary.
         """
@@ -129,9 +136,19 @@ class Catalogue(Mixin):
         dct = self._map.to_py()
         assert dct is not None
         dct["tags"] = list(sorted(dct["tags"].keys()))
-        dct["events"] = list(sorted(dct["events"].keys()))
+        dct["events"] = [
+            uuid if event_as_uuid else Event._from_uuid(uuid, self._db).to_dict()
+            for uuid in sorted(dct["events"].keys())
+        ]
         dct["attributes"] = dict(sorted(dct["attributes"].items()))
-        return dict(sorted(dct.items()))
+        if not event_as_uuid:
+            events = dct["events"]
+            for idx, event_dict in enumerate(events):
+                event_dict = {
+                    key: event_dict[key] for key in EventModel.model_fields.keys()
+                }
+                events[idx] = event_dict
+        return {key: dct[key] for key in CatalogueModel.model_fields.keys()}
 
     def on_change_name(self, callback: Callable[[str], None]) -> None:
         """

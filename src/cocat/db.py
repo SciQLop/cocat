@@ -20,6 +20,8 @@ from pycrdt import (
     create_update_message,
     handle_sync_message,
 )
+from rich.console import Console
+from rich.pretty import pprint
 
 from .catalogue import Catalogue
 from .event import Event
@@ -60,6 +62,12 @@ class DB:
             str, dict[str, list[Callable[[Any, Any], None]]]
         ] = defaultdict(lambda: defaultdict(list))
         self._events: dict[str, Event] = {}
+
+    def __repr__(self) -> str:
+        console = Console()
+        with console.capture() as capture:
+            pprint(self.to_dict(), console=console, max_length=8)
+        return capture.get()
 
     def _callback(
         self, callback: Callable[..., None], origin: "DB" | None, *args: Any
@@ -273,8 +281,8 @@ class DB:
             The catalogues in the database.
         """
         return {
-            Catalogue._from_map(catalogue, self)
-            for catalogue in self._catalogue_maps.values()
+            Catalogue._from_map(self._catalogue_maps[uuid], self)
+            for uuid in sorted(self._catalogue_maps.keys())
         }
 
     @property
@@ -283,7 +291,10 @@ class DB:
         Returns:
             The events in the database.
         """
-        return {Event._from_map(event, self) for event in self._event_maps.values()}
+        return {
+            Event._from_map(self._event_maps[uuid], self)
+            for uuid in sorted(self._event_maps.keys())
+        }
 
     def create_catalogue(
         self,
@@ -475,10 +486,27 @@ class DB:
         Returns:
             The database as a dictionary.
         """
-        return {
-            "catalogues": [catalogue.to_dict() for catalogue in self.catalogues],
-            "events": [event.to_dict() for event in self.events],
+        db_dict = {
+            "events": list(
+                sorted(
+                    [event.to_dict() for event in self.events],
+                    key=lambda event: event["uuid"],
+                )
+            ),
+            "catalogues": list(
+                sorted(
+                    [catalogue.to_dict(True) for catalogue in self.catalogues],
+                    key=lambda catalogue: catalogue["uuid"],
+                )
+            ),
         }
+        events = db_dict["events"]
+        for idx, event_dict in enumerate(events):
+            event_dict = {
+                key: event_dict[key] for key in EventModel.model_fields.keys()
+            }
+            events[idx] = event_dict
+        return db_dict
 
     def to_json(self) -> str:
         """

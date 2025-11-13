@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from pycrdt import Doc
 
 from cocat import DB
@@ -115,3 +117,267 @@ def test_dump_load(tmp_path):
     path1 = tmp_path / "db1.json"
     path1.write_text(db1.to_json())
     assert path0.read_text() == path1.read_text()
+
+
+def test_db_repr():
+    db = DB()
+
+    catalogues = [
+        db.create_catalogue(
+            uuid=f"d3d76dc2-ac66-4909-b2f2-125990fbe99{i}",
+            name="cat0",
+            author="John",
+            attributes={"foo": "bar"},
+        )
+        for i in range(10)
+    ]
+
+    events = [
+        db.create_event(
+            uuid=f"7788cbfa-caed-4f05-892e-26e01e25916{i}",
+            start=datetime(2025, 1, 1) + timedelta(days=i),
+            stop=datetime(2026, 1, 1) + timedelta(days=i),
+            author="Paul",
+        )
+        for i in range(10)
+    ]
+    for catalogue in catalogues:
+        catalogue.add_events(events)
+    print(repr(db))
+    assert (
+        repr(db)
+        == """\
+{
+│   'events': [
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259160',
+│   │   │   'start': '2025-01-01 00:00:00',
+│   │   │   'stop': '2026-01-01 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259161',
+│   │   │   'start': '2025-01-02 00:00:00',
+│   │   │   'stop': '2026-01-02 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259162',
+│   │   │   'start': '2025-01-03 00:00:00',
+│   │   │   'stop': '2026-01-03 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259163',
+│   │   │   'start': '2025-01-04 00:00:00',
+│   │   │   'stop': '2026-01-04 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259164',
+│   │   │   'start': '2025-01-05 00:00:00',
+│   │   │   'stop': '2026-01-05 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259165',
+│   │   │   'start': '2025-01-06 00:00:00',
+│   │   │   'stop': '2026-01-06 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259166',
+│   │   │   'start': '2025-01-07 00:00:00',
+│   │   │   'stop': '2026-01-07 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259167',
+│   │   │   'start': '2025-01-08 00:00:00',
+│   │   │   'stop': '2026-01-08 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   ... +2
+│   ],
+│   'catalogues': [
+│   │   {
+│   │   │   'uuid': 'd3d76dc2-ac66-4909-b2f2-125990fbe990',
+│   │   │   'name': 'cat0',
+│   │   │   'author': 'John',
+│   │   │   'tags': [],
+│   │   │   'attributes': {'foo': 'bar'},
+│   │   │   'events': [
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259160',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259161',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259162',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259163',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259164',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259165',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259166',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259167',
+│   │   │   │   ... +2
+│   │   │   ]
+│   │   },
+│   │   {
+│   │   │   'uuid': 'd3d76dc2-ac66-4909-b2f2-125990fbe991',
+│   │   │   'name': 'cat0',
+│   │   │   'author': 'John',
+│   │   │   'tags': [],
+│   │   │   'attributes': {'foo': 'bar'},
+│   │   │   'events': [
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259160',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259161',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259162',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259163',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259164',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259165',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259166',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259167',
+│   │   │   │   ... +2
+│   │   │   ]
+│   │   },
+│   │   {
+│   │   │   'uuid': 'd3d76dc2-ac66-4909-b2f2-125990fbe992',
+│   │   │   'name': 'cat0',
+│   │   │   'author': 'John',
+│   │   │   'tags': [],
+│   │   │   'attributes': {'foo': 'bar'},
+│   │   │   'events': [
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259160',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259161',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259162',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259163',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259164',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259165',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259166',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259167',
+│   │   │   │   ... +2
+│   │   │   ]
+│   │   },
+│   │   {
+│   │   │   'uuid': 'd3d76dc2-ac66-4909-b2f2-125990fbe993',
+│   │   │   'name': 'cat0',
+│   │   │   'author': 'John',
+│   │   │   'tags': [],
+│   │   │   'attributes': {'foo': 'bar'},
+│   │   │   'events': [
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259160',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259161',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259162',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259163',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259164',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259165',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259166',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259167',
+│   │   │   │   ... +2
+│   │   │   ]
+│   │   },
+│   │   {
+│   │   │   'uuid': 'd3d76dc2-ac66-4909-b2f2-125990fbe994',
+│   │   │   'name': 'cat0',
+│   │   │   'author': 'John',
+│   │   │   'tags': [],
+│   │   │   'attributes': {'foo': 'bar'},
+│   │   │   'events': [
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259160',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259161',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259162',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259163',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259164',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259165',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259166',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259167',
+│   │   │   │   ... +2
+│   │   │   ]
+│   │   },
+│   │   {
+│   │   │   'uuid': 'd3d76dc2-ac66-4909-b2f2-125990fbe995',
+│   │   │   'name': 'cat0',
+│   │   │   'author': 'John',
+│   │   │   'tags': [],
+│   │   │   'attributes': {'foo': 'bar'},
+│   │   │   'events': [
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259160',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259161',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259162',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259163',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259164',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259165',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259166',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259167',
+│   │   │   │   ... +2
+│   │   │   ]
+│   │   },
+│   │   {
+│   │   │   'uuid': 'd3d76dc2-ac66-4909-b2f2-125990fbe996',
+│   │   │   'name': 'cat0',
+│   │   │   'author': 'John',
+│   │   │   'tags': [],
+│   │   │   'attributes': {'foo': 'bar'},
+│   │   │   'events': [
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259160',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259161',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259162',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259163',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259164',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259165',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259166',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259167',
+│   │   │   │   ... +2
+│   │   │   ]
+│   │   },
+│   │   {
+│   │   │   'uuid': 'd3d76dc2-ac66-4909-b2f2-125990fbe997',
+│   │   │   'name': 'cat0',
+│   │   │   'author': 'John',
+│   │   │   'tags': [],
+│   │   │   'attributes': {'foo': 'bar'},
+│   │   │   'events': [
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259160',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259161',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259162',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259163',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259164',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259165',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259166',
+│   │   │   │   '7788cbfa-caed-4f05-892e-26e01e259167',
+│   │   │   │   ... +2
+│   │   │   ]
+│   │   },
+│   │   ... +2
+│   ]
+}
+"""
+    )

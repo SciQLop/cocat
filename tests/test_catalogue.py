@@ -1,4 +1,4 @@
-from json import loads
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -32,15 +32,6 @@ def test_catalogue():
         author="John",
     )
     catalogue0.add_events(event0)
-
-    assert loads(repr(catalogue1)) == {
-        "uuid": str(catalogue0.uuid),
-        "events": [str(event0.uuid)],
-        "author": "John",
-        "name": "cat0",
-        "tags": [],
-        "attributes": {"foo": "bar"},
-    }
 
     assert catalogue0.name == "cat0"
     catalogue0.name = "cat1"
@@ -165,6 +156,123 @@ def test_iterate_catalogue():
     ]
     catalogue.add_events(events)
     assert set(catalogue) == set(events)
+
+
+def test_catalogue_repr():
+    db = DB()
+
+    catalogue = db.create_catalogue(
+        uuid="d3d76dc2-ac66-4909-b2f2-125990fbe999",
+        name="cat0",
+        author="John",
+        attributes={"foo": "bar"},
+    )
+
+    events = [
+        db.create_event(
+            uuid=f"7788cbfa-caed-4f05-892e-26e01e25916{i}",
+            start=datetime(2025, 1, 1) + timedelta(days=i),
+            stop=datetime(2026, 1, 1) + timedelta(days=i),
+            author="Paul",
+        )
+        for i in range(10)
+    ]
+    catalogue.add_events(events)
+    assert (
+        repr(catalogue)
+        == """\
+{
+│   'uuid': 'd3d76dc2-ac66-4909-b2f2-125990fbe999',
+│   'name': 'cat0',
+│   'author': 'John',
+│   'tags': [],
+│   'attributes': {'foo': 'bar'},
+│   'events': [
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259160',
+│   │   │   'start': '2025-01-01 00:00:00',
+│   │   │   'stop': '2026-01-01 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259161',
+│   │   │   'start': '2025-01-02 00:00:00',
+│   │   │   'stop': '2026-01-02 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259162',
+│   │   │   'start': '2025-01-03 00:00:00',
+│   │   │   'stop': '2026-01-03 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259163',
+│   │   │   'start': '2025-01-04 00:00:00',
+│   │   │   'stop': '2026-01-04 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259164',
+│   │   │   'start': '2025-01-05 00:00:00',
+│   │   │   'stop': '2026-01-05 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259165',
+│   │   │   'start': '2025-01-06 00:00:00',
+│   │   │   'stop': '2026-01-06 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259166',
+│   │   │   'start': '2025-01-07 00:00:00',
+│   │   │   'stop': '2026-01-07 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   {
+│   │   │   'uuid': '7788cbfa-caed-4f05-892e-26e01e259167',
+│   │   │   'start': '2025-01-08 00:00:00',
+│   │   │   'stop': '2026-01-08 00:00:00',
+│   │   │   'author': 'Paul',
+│   │   │   'products': [],
+│   │   │   'rating': None,
+│   │   │   'tags': [],
+│   │   │   'attributes': {}
+│   │   },
+│   │   ... +2
+│   ]
+}
+"""
+    )
 
 
 def test_dynamic_catalogue():
