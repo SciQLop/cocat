@@ -19,7 +19,6 @@ from .votable import export_votable_file, import_votable_file
 class Session:
     def __init__(
         self,
-
         host: str = "http://localhost",
         port: int = 8000,
         file_path: str = "updates.y",
