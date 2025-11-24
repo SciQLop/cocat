@@ -73,24 +73,25 @@ run(main)
 
 ### High-level API
 
-A higher-level API is also provided, which is more suitable for an interactive workflow that
-is typical of a Jupyter notebook or the Python REPL. Notice the top-level `await`, that works out-of-the-box
-in Jupyter, but not in a classic Python REPL. Instead, an async Python REPL has to be used (`python -m asyncio`).
+A higher-level API is also provided, which is more suited to interactive workflows with
+a Python REPL or a Jupyter notebook. This API is not async, and as such it requires manual
+synchronization using `refresh()` and `save()` to pull the remote changes and push the local changes,
+respectively.
 
 ```py
 from cocat import (
     create_catalogue,
     create_event,
     log_in,
+    log_out,
     refresh,
     save,
     set_config,
-    synchronize,
 )
 
 set_config(host="http://localhost", port=8000, file_path="updates.y")
 log_in("paul@example.com", "my_password")
-await synchronize()
+refresh()
 
 catalogue0 = create_catalogue(name="cat0", author="Paul")
 save()
@@ -106,6 +107,8 @@ save()
 
 refresh()
 event1 = get_event("497393db-7dd6-4d7b-9ff1-8a8155bfed54")
+
+log_out()
 ```
 
 ### CLI
