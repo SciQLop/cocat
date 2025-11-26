@@ -53,8 +53,6 @@ class CocatApp:  # pragma: nocover
                 root_path = '/' + root_path
             if root_path.endswith('/'):
                 root_path = root_path[:-1]
-        else:
-            root_path = ''
 
         self.app = app = FastAPI(lifespan=lifespan, root_path=root_path)
 
