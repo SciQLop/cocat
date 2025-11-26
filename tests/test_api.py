@@ -9,6 +9,7 @@ from wire_websocket import WebSocketClient
 import cocat.api
 from cocat import (
     DB,
+    api,
     create_catalogue,
     create_event,
     get_catalogue,
@@ -112,6 +113,24 @@ def test_login(tmp_path, server, room_id, monkeypatch):
 
         with pytest.raises(RuntimeError, match="Not logged in"):
             refresh()
+
+
+def test_login_with_port_in_host(tmp_path, server, room_id, monkeypatch):
+    with monkeypatch.context() as m:
+        m.setattr(cocat.api, "save_on_exit", lambda: None)
+        host, port = server
+        file_path = tmp_path / "updates.y"
+        set_config(
+            host=f"http://{host}:{port}",
+            file_path=file_path,
+            room_id=room_id,
+        )
+
+        with pytest.raises(RuntimeError, match="Not logged in"):
+            refresh()
+
+        assert api.SESSION.host == f"http://{host}"
+        assert api.SESSION.port == port
 
 
 def test_atexit(room_id, server, user, tmp_path, monkeypatch, capsys):

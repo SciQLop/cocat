@@ -4,6 +4,7 @@ from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Sequence
+from urllib.parse import urlparse
 from uuid import UUID
 
 import httpx
@@ -17,21 +18,44 @@ from .votable import export_votable_file, import_votable_file
 
 
 class Session:
+    host = "http://localhost"
+    port = 8000
+    prefix = ""
+    room_id = "room0"
+    file_path = "updates.y"
+
     def __init__(
         self,
-        host: str = "http://localhost",
-        port: int = 8000,
-        file_path: str = "updates.y",
-        room_id: str = "room0",
+        host: str | None = None,
+        port: int | None = None,
+        file_path: str | None = None,
+        room_id: str | None = None,
     ):
-        self.host = host
-        self.port = port
         self.cookies = httpx.Cookies()
-        self.file_path = file_path
-        self.room_id = room_id
         self.db = DB()
         self.connected = False
         self.exit_stack: ExitStack | None = None
+        self.set_config(host=host, port=port, file_path=file_path, room_id=room_id)
+
+    def set_config(
+        self,
+        host: str | None = None,
+        port: int | None = None,
+        file_path: str | None = None,
+        room_id: str | None = None,
+    ) -> None:
+        if host is not None:
+            parsed_url = urlparse(host)
+            self.host = f"{parsed_url.scheme}://{parsed_url.hostname}"
+            if parsed_url.port and port is None:
+                self.port = parsed_url.port
+            self.prefix = parsed_url.path + "/" if parsed_url.path else ""
+        if port is not None:
+            self.port = port
+        if room_id is not None:
+            self.room_id = room_id
+        if file_path is not None:
+            self.file_path = file_path
 
     def check_connected(self) -> None:
         if not self.connected:
@@ -41,7 +65,7 @@ class Session:
         with ExitStack() as exit_stack:
             self.client = exit_stack.enter_context(
                 WebSocketClient(
-                    id=f"room/{self.room_id}",
+                    id=f"{self.prefix}room/{self.room_id}",
                     doc=self.db.doc,
                     host=self.host,
                     port=self.port,
@@ -77,14 +101,7 @@ def set_config(
         file_path: The path to the file where updates will be stored.
         room_id: The ID of the room to connect to.
     """
-    if host is not None:
-        SESSION.host = host
-    if port is not None:
-        SESSION.port = port
-    if file_path is not None:
-        SESSION.file_path = file_path
-    if room_id is not None:
-        SESSION.room_id = room_id
+    SESSION.set_config(host=host, port=port, file_path=file_path, room_id=room_id)
 
 
 def log_in(username: str, password: str) -> None:
@@ -96,7 +113,9 @@ def log_in(username: str, password: str) -> None:
         password: The password to use to log in.
     """
     data = {"username": username, "password": password}
-    response = httpx.post(f"{SESSION.host}:{SESSION.port}/auth/jwt/login", data=data)
+    response = httpx.post(
+        f"{SESSION.host}:{SESSION.port}/{SESSION.prefix}auth/jwt/login", data=data
+    )
     cookie = response.cookies.get("fastapiusersauth")
     if cookie is None:
         raise RuntimeError("Wrong username or password")
