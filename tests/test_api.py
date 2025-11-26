@@ -18,6 +18,7 @@ from cocat import (
     refresh,
     save,
     set_config,
+    api
 )
 
 
@@ -127,6 +128,9 @@ def test_login_with_port_in_host(tmp_path, server, room_id, monkeypatch):
 
         with pytest.raises(RuntimeError, match="Not logged in"):
             refresh()
+
+        assert api.SESSION.host == f"http://{host}"
+        assert api.SESSION.port == port
 
 
 def test_atexit(room_id, server, user, tmp_path, monkeypatch, capsys):
