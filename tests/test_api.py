@@ -9,6 +9,7 @@ from wire_websocket import WebSocketClient
 import cocat.api
 from cocat import (
     DB,
+    api,
     create_catalogue,
     create_event,
     get_catalogue,
@@ -18,7 +19,6 @@ from cocat import (
     refresh,
     save,
     set_config,
-    api
 )
 
 
@@ -33,11 +33,11 @@ def test_api(tmp_path, server, user, room_id, monkeypatch):
         cookies = httpx.Cookies()
         cookies.set("fastapiusersauth", cookie)
         with WebSocketClient(
-                id=f"room/{room_id}",
-                auto_push=True,
-                host=f"http://{host}",
-                port=port,
-                cookies=cookies,
+            id=f"room/{room_id}",
+            auto_push=True,
+            host=f"http://{host}",
+            port=port,
+            cookies=cookies,
         ) as client:
             db = DB(doc=client.doc)
 

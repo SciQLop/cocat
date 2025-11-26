@@ -1,8 +1,8 @@
+import os
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
 from typing import Any
-import os
 
 from anyio import sleep_forever
 from anyio.abc import TaskStatus
@@ -47,11 +47,11 @@ class CocatApp:  # pragma: nocover
                 await db.create_db_and_tables()
                 yield
 
-        root_path = os.environ.get('COCAT_PROXY_PREFIX', '')
+        root_path = os.environ.get("COCAT_PROXY_PREFIX", "")
         if root_path:
-            if not root_path.startswith('/'):
-                root_path = '/' + root_path
-            if root_path.endswith('/'):
+            if not root_path.startswith("/"):
+                root_path = "/" + root_path
+            if root_path.endswith("/"):
                 root_path = root_path[:-1]
 
         self.app = app = FastAPI(lifespan=lifespan, root_path=root_path)
