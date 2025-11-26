@@ -50,6 +50,7 @@ test = [
   "coverage",
   "trio",
   "requests",
+  "types-requests",
   "astropy",
 ]
 docs = [
@@ -67,7 +68,7 @@ server = [
 ]
 
 [project.scripts]
-cocat = "cocat.cli:main"
+cocat = "cocat.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/SciQLop/cocat"

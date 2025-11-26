@@ -77,8 +77,7 @@ async def test_websocket(free_tcp_port, tmp_path):
     assert db2.catalogues == {catalogue1}
 
 
-async def test_origin(server, user):
-    print(server)
+async def test_origin(server, user, room_id):
     host, port = server
     username, password = user
     data = {"username": username, "password": password}
@@ -88,13 +87,13 @@ async def test_origin(server, user):
     cookies.set("fastapiusersauth", cookie)
     async with (
         AsyncWebSocketClient(
-            id="room/myroom",
+            id=f"room/{room_id}",
             host=f"http://{host}",
             port=port,
             cookies=cookies,
         ) as client0,
         AsyncWebSocketClient(
-            id="room/myroom",
+            id=f"room/{room_id}",
             host=f"http://{host}",
             port=port,
             cookies=cookies,

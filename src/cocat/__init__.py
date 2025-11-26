@@ -8,6 +8,11 @@ from .api import refresh as refresh
 from .api import save as save
 from .api import set_config as set_config
 from .catalogue import Catalogue as Catalogue
+from .cli import add_user_to_room as add_user_to_room
+from .cli import create_user as create_user
+from .cli import get_user as get_user
+from .cli import remove_user_from_room as remove_user_from_room
+from .cli import serve as serve
 from .db import DB as DB
 from .event import Event as Event
 from .models import CatalogueModel as CatalogueModel
