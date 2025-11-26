@@ -2,10 +2,12 @@ from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
 from typing import Any
+import os
 
 from anyio import sleep_forever
 from anyio.abc import TaskStatus
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from wire_file import AsyncFileClient
 from wiredb import AsyncChannel, Room, RoomManager
 
@@ -45,7 +47,23 @@ class CocatApp:  # pragma: nocover
                 await db.create_db_and_tables()
                 yield
 
-        self.app = app = FastAPI(lifespan=lifespan)
+        root_path = os.environ.get('COCAT_PROXY_PREFIX', '')
+        if root_path:
+            if not root_path.startswith('/'):
+                root_path = '/' + root_path
+            if root_path.endswith('/'):
+                root_path = root_path[:-1]
+        else:
+            root_path = ''
+
+        self.app = app = FastAPI(lifespan=lifespan, root_path=root_path)
+
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[],
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
         current_superuser = backend.fastapi_users.current_user(
             active=True, superuser=True
