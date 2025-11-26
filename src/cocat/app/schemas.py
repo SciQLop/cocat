@@ -1,15 +1,20 @@
 import uuid
 
 from fastapi_users import schemas
+from pydantic import BaseModel
 
 
-class UserRead(schemas.BaseUser[uuid.UUID]):
+class CocatUser(BaseModel):
+    rooms: list[str] = []
+
+
+class UserRead(schemas.BaseUser[uuid.UUID], CocatUser):
     pass
 
 
-class UserCreate(schemas.BaseUserCreate):
+class UserCreate(schemas.BaseUserCreate, CocatUser):
     pass
 
 
-class UserUpdate(schemas.BaseUserUpdate):
+class UserUpdate(schemas.BaseUserUpdate, CocatUser):
     pass

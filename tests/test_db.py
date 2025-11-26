@@ -143,7 +143,6 @@ def test_db_repr():
     ]
     for catalogue in catalogues:
         catalogue.add_events(events)
-    print(repr(db))
     assert (
         repr(db)
         == """\

@@ -21,7 +21,7 @@ from cocat import (
 )
 
 
-def test_api(tmp_path, server, user, monkeypatch):
+def test_api(tmp_path, server, user, room_id, monkeypatch):
     with monkeypatch.context() as m:
         m.setattr(cocat.api, "save_on_exit", lambda: None)
         host, port = server
@@ -32,7 +32,7 @@ def test_api(tmp_path, server, user, monkeypatch):
         cookies = httpx.Cookies()
         cookies.set("fastapiusersauth", cookie)
         with WebSocketClient(
-            id="room/room1",
+            id=f"room/{room_id}",
             auto_push=True,
             host=f"http://{host}",
             port=port,
@@ -45,7 +45,7 @@ def test_api(tmp_path, server, user, monkeypatch):
                 host=f"http://{host}",
                 port=port,
                 file_path=file_path,
-                room_id="room1",
+                room_id=room_id,
             )
             log_in(*user)
 
@@ -98,7 +98,7 @@ def test_api(tmp_path, server, user, monkeypatch):
             log_in("foo", "bar")
 
 
-def test_login(tmp_path, server, monkeypatch):
+def test_login(tmp_path, server, room_id, monkeypatch):
     with monkeypatch.context() as m:
         m.setattr(cocat.api, "save_on_exit", lambda: None)
         host, port = server
@@ -107,21 +107,21 @@ def test_login(tmp_path, server, monkeypatch):
             host=f"http://{host}",
             port=port,
             file_path=file_path,
-            room_id="room1",
+            room_id=room_id,
         )
 
         with pytest.raises(RuntimeError, match="Not logged in"):
             refresh()
 
 
-def test_atexit(server, user, tmp_path, monkeypatch, capsys):
+def test_atexit(room_id, server, user, tmp_path, monkeypatch, capsys):
     with monkeypatch.context() as m:
         m.setattr(builtins, "input", lambda _: "yes")
         host, port = server
         username, password = user
         file_path = tmp_path / "updates.y"
         set_config(
-            host=f"http://{host}", port=port, file_path=file_path, room_id="room1"
+            host=f"http://{host}", port=port, file_path=file_path, room_id=room_id
         )
         log_in(username, password)
         create_catalogue(name="cat0", author="Paul Newton")

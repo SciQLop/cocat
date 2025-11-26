@@ -1,6 +1,8 @@
 import uuid
+from dataclasses import dataclass
+from typing import Annotated, Any
 
-from fastapi import Depends, Request
+from fastapi import Cookie, Depends, Path, Request, WebSocket, status
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin, models
 from fastapi_users.authentication import (
     AuthenticationBackend,
@@ -9,7 +11,7 @@ from fastapi_users.authentication import (
 )
 from fastapi_users.db import SQLAlchemyUserDatabase
 
-from .db import User, get_user_db
+from .db import User
 
 SECRET = str(uuid.uuid4())
 
@@ -24,28 +26,69 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     async def on_after_forgot_password(
         self, user: User, token: str, request: Request | None = None
     ):
-        print(f"User {user.id} has forgot their password. Reset token: {token}")
+        print(
+            f"User {user.id} has forgot their password. Reset token: {token}"
+        )  # pragma: nocover
 
     async def on_after_request_verify(
         self, user: User, token: str, request: Request | None = None
     ):
-        print(f"Verification requested for user {user.id}. Verification token: {token}")
+        print(
+            f"Verification requested for user {user.id}. Verification token: {token}"
+        )  # pragma: nocover
 
 
-async def get_user_manager(user_db: SQLAlchemyUserDatabase = Depends(get_user_db)):
-    yield UserManager(user_db)
+@dataclass
+class Backend:
+    auth_backend: Any
+    current_active_user: Any
+    fastapi_users: Any
+    get_jwt_strategy: Any
+    get_user_manager: Any
+    websocket_auth: Any
 
 
-def get_jwt_strategy() -> JWTStrategy[models.UP, models.ID]:
-    return JWTStrategy(secret=SECRET, lifetime_seconds=3600)
+def get_backend(db) -> Backend:
+    async def get_user_manager(
+        user_db: SQLAlchemyUserDatabase = Depends(db.get_user_db),
+    ):
+        yield UserManager(user_db)
 
+    async def websocket_auth(
+        websocket: WebSocket,
+        room_id: str = Path(...),
+        fastapiusersauth: Annotated[str | None, Cookie()] = None,
+        user_manager: BaseUserManager[models.UP, models.ID] = Depends(get_user_manager),
+    ) -> WebSocket | None:  # pragma: nocover
+        accept_websocket = False
+        if fastapiusersauth is not None:
+            user = await get_jwt_strategy().read_token(fastapiusersauth, user_manager)  # type: ignore[func-returns-value,arg-type]
+            if user and room_id in user.rooms:
+                accept_websocket = True
+        if accept_websocket:
+            return websocket
 
-auth_backend: AuthenticationBackend = AuthenticationBackend(
-    name="cookie",
-    transport=CookieTransport(),
-    get_strategy=get_jwt_strategy,
-)
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return None
 
-fastapi_users = FastAPIUsers[User, uuid.UUID](get_user_manager, [auth_backend])
+    def get_jwt_strategy() -> JWTStrategy[models.UP, models.ID]:  # pragma: nocover
+        return JWTStrategy(secret=SECRET, lifetime_seconds=3600)
 
-current_active_user = fastapi_users.current_user(active=True)
+    auth_backend: AuthenticationBackend = AuthenticationBackend(
+        name="cookie",
+        transport=CookieTransport(),
+        get_strategy=get_jwt_strategy,
+    )
+
+    fastapi_users = FastAPIUsers[User, uuid.UUID](get_user_manager, [auth_backend])
+
+    current_active_user = fastapi_users.current_user(active=True)
+
+    return Backend(
+        auth_backend=auth_backend,
+        current_active_user=current_active_user,
+        fastapi_users=fastapi_users,
+        get_jwt_strategy=get_jwt_strategy,
+        get_user_manager=get_user_manager,
+        websocket_auth=websocket_auth,
+    )

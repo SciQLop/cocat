@@ -1,21 +1,20 @@
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Any
 
 from anyio import sleep_forever
 from anyio.abc import TaskStatus
-from fastapi import Cookie, Depends, FastAPI, WebSocket, WebSocketDisconnect, status
-from fastapi_users import BaseUserManager, models
+from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from wire_file import AsyncFileClient
 from wiredb import AsyncChannel, Room, RoomManager
 
-from .db import create_db_and_tables
+from .db import get_db
 from .schemas import UserCreate, UserRead, UserUpdate
-from .users import auth_backend, fastapi_users, get_jwt_strategy, get_user_manager
+from .users import get_backend
 
 
-class StoredRoom(Room):
+class StoredRoom(Room):  # pragma: nocover
     def __init__(self, directory: str, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._directory = directory
@@ -33,79 +32,67 @@ class StoredRoom(Room):
             await sleep_forever()
 
 
-class CocatApp:
+class CocatApp:  # pragma: nocover
     def __init__(self, update_dir: str, db_path: str = "./test.db") -> None:
+        db = get_db(db_path)
+        backend = get_backend(db)
+
         @asynccontextmanager
         async def lifespan(app: FastAPI):
             async with RoomManager(
                 partial(StoredRoom, update_dir)
             ) as self.room_manager:
-                await create_db_and_tables(db_path)
+                await db.create_db_and_tables()
                 yield
 
         self.app = app = FastAPI(lifespan=lifespan)
 
-        current_superuser = fastapi_users.current_user(active=True, superuser=True)
+        current_superuser = backend.fastapi_users.current_user(
+            active=True, superuser=True
+        )
 
         app.include_router(
-            fastapi_users.get_auth_router(auth_backend),
+            backend.fastapi_users.get_auth_router(backend.auth_backend),
             prefix="/auth/jwt",
             tags=["auth"],
         )
         app.include_router(
-            fastapi_users.get_register_router(UserRead, UserCreate),
+            backend.fastapi_users.get_register_router(UserRead, UserCreate),
             prefix="/auth",
             tags=["auth"],
             dependencies=[Depends(current_superuser)],
         )
         app.include_router(
-            fastapi_users.get_reset_password_router(),
+            backend.fastapi_users.get_reset_password_router(),
             prefix="/auth",
             tags=["auth"],
         )
         app.include_router(
-            fastapi_users.get_verify_router(UserRead),
+            backend.fastapi_users.get_verify_router(UserRead),
             prefix="/auth",
             tags=["auth"],
         )
         app.include_router(
-            fastapi_users.get_users_router(UserRead, UserUpdate),
+            backend.fastapi_users.get_users_router(UserRead, UserUpdate),
             prefix="/users",
             tags=["users"],
         )
 
-        @app.websocket("/room/{id}")
+        @app.websocket("/room/{room_id}")
         async def connect_room(
-            id: str,
-            websocket=Depends(websocket_auth),
+            room_id: str,
+            websocket=Depends(backend.websocket_auth),
         ):
             if websocket is None:
                 return
 
             await websocket.accept()
-            ywebsocket = YWebSocket(websocket, id)
+            ywebsocket = YWebSocket(websocket, room_id)
             room = await self.room_manager.get_room(ywebsocket.id)
             await room.serve(ywebsocket)
 
 
-async def websocket_auth(
-    websocket: WebSocket,
-    fastapiusersauth: Annotated[str | None, Cookie()] = None,
-    user_manager: BaseUserManager[models.UP, models.ID] = Depends(get_user_manager),
-) -> WebSocket | None:
-    accept_websocket = False
-    if fastapiusersauth is not None:
-        user = await get_jwt_strategy().read_token(fastapiusersauth, user_manager)  # type: ignore[func-returns-value,arg-type]
-        if user:
-            accept_websocket = True
-    if accept_websocket:
-        return websocket
-
-    await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-    return None
-
-
-class YWebSocket(AsyncChannel):
+class YWebSocket(AsyncChannel):  # pragma: nocover
     def __init__(self, websocket: WebSocket, path: str) -> None:
         self._websocket = websocket
         self._path = path

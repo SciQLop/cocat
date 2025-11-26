@@ -5,7 +5,7 @@ import time
 from uuid import uuid4
 
 import pytest
-import requests  # type: ignore[import-untyped]
+import requests
 
 
 @pytest.fixture()
@@ -21,7 +21,12 @@ def db_path(tmp_path):
 
 
 @pytest.fixture()
-def user(db_path: str):
+def room_id():
+    return str(uuid4())
+
+
+@pytest.fixture()
+def user(db_path: str, room_id: str):
     email = f"user_{uuid4().hex}@foo.com"
     password = f"pwd_{uuid4().hex}"
     command = [
@@ -31,6 +36,17 @@ def user(db_path: str):
         email,
         "--password",
         password,
+        "--db_path",
+        db_path,
+    ]
+    subprocess.check_call(command)
+    command = [
+        "cocat",
+        "add-user-to-room",
+        "--email",
+        email,
+        "--room_id",
+        room_id,
         "--db_path",
         db_path,
     ]
