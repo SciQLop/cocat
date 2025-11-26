@@ -32,11 +32,11 @@ def test_api(tmp_path, server, user, room_id, monkeypatch):
         cookies = httpx.Cookies()
         cookies.set("fastapiusersauth", cookie)
         with WebSocketClient(
-            id=f"room/{room_id}",
-            auto_push=True,
-            host=f"http://{host}",
-            port=port,
-            cookies=cookies,
+                id=f"room/{room_id}",
+                auto_push=True,
+                host=f"http://{host}",
+                port=port,
+                cookies=cookies,
         ) as client:
             db = DB(doc=client.doc)
 
@@ -106,6 +106,21 @@ def test_login(tmp_path, server, room_id, monkeypatch):
         set_config(
             host=f"http://{host}",
             port=port,
+            file_path=file_path,
+            room_id=room_id,
+        )
+
+        with pytest.raises(RuntimeError, match="Not logged in"):
+            refresh()
+
+
+def test_login_with_port_in_host(tmp_path, server, room_id, monkeypatch):
+    with monkeypatch.context() as m:
+        m.setattr(cocat.api, "save_on_exit", lambda: None)
+        host, port = server
+        file_path = tmp_path / "updates.y"
+        set_config(
+            host=f"http://{host}:{port}",
             file_path=file_path,
             room_id=room_id,
         )
