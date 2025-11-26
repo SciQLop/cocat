@@ -1,5 +1,10 @@
 # Version history
 
+## 0.8.0
+
+- Add user room permissions (SQLite database is incompatible).
+- Add reverse proxy prefix.
+
 ## 0.7.0
 
 - Use `rich`'s pretty representations.
