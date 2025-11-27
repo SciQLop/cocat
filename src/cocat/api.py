@@ -21,7 +21,7 @@ class Session:
     host = "http://localhost"
     port = 8000
     prefix = ""
-    room_id = "room0"
+    room_id = None
     file_path = "updates.y"
 
     def __init__(
@@ -61,7 +61,10 @@ class Session:
         if not self.connected:
             raise RuntimeError("Not logged in")
 
-    def connect(self) -> None:
+    def connect(self, room_id: str | None = None) -> None:
+        if self.room_id is None:
+            self.room_id = room_id
+
         with ExitStack() as exit_stack:
             self.client = exit_stack.enter_context(
                 WebSocketClient(
@@ -120,7 +123,8 @@ def log_in(username: str, password: str) -> None:
     if cookie is None:
         raise RuntimeError("Wrong username or password")
     SESSION.cookies.set("fastapiusersauth", cookie)
-    SESSION.connect()
+    room_id = username[: username.find("@")]
+    SESSION.connect(room_id)
 
 
 def log_out() -> None:

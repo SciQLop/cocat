@@ -27,20 +27,20 @@ def test_user(tmp_path, server, room_id, monkeypatch):
         user = create_user(email=email, password=password, db_path=db_path)
 
     assert user.email == email
-    assert not user.rooms
+    assert user.rooms == ["a"]
 
     add_user_to_room(email=email, room_id=room_id0, db_path=db_path)
     add_user_to_room(email=email, room_id=room_id1, db_path=db_path)
 
     user = get_user(email=email, db_path=db_path)
     assert user.email == email
-    assert set(user.rooms) == set([room_id0, room_id1])
+    assert set(user.rooms) == set([room_id0, room_id1, "a"])
 
     remove_user_from_room(email=email, room_id=room_id1, db_path=db_path)
 
     user = get_user(email=email, db_path=db_path)
     assert user.email == email
-    assert user.rooms == [room_id0]
+    assert set(user.rooms) == set([room_id0, "a"])
 
     with monkeypatch.context() as m:
         m.setattr(cocat.api, "save_on_exit", lambda: None)
