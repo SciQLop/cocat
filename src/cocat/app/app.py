@@ -8,11 +8,12 @@ from anyio import sleep_forever
 from anyio.abc import TaskStatus
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import select
 from wire_file import AsyncFileClient
 from wiredb import AsyncChannel, Room, RoomManager
 
 from .db import User, get_db
-from .schemas import CocatUser, UserCreate, UserRead, UserUpdate
+from .schemas import RoomUsers, UserCreate, UserRead, UserRooms, UserUpdate
 from .users import get_backend
 
 
@@ -107,11 +108,20 @@ class CocatApp:  # pragma: nocover
             room = await self.room_manager.get_room(ywebsocket.id)
             await room.serve(ywebsocket)
 
-        @app.get("/rooms", response_model=CocatUser)
+        @app.get("/rooms", response_model=UserRooms)
         async def get_rooms(
             user: User = Depends(backend.current_active_user),
         ):
             return user
+
+        @app.get("/room/{room_id}/users", response_model=RoomUsers)
+        async def get_room_users(room_id: str):
+            async with db.async_session_maker() as session:
+                statement = select(User)
+                users = (await session.execute(statement)).unique().all()
+            return {
+                "users": [usr.User.email for usr in users if room_id in usr.User.rooms]
+            }
 
 
 class YWebSocket(AsyncChannel):  # pragma: nocover

@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 import requests
+from utils import add_user_to_room, create_user
 
 
 @pytest.fixture()
@@ -29,28 +30,8 @@ def room_id():
 def user(db_path: str, room_id: str):
     email = f"user_{uuid4().hex}@foo.com"
     password = f"pwd_{uuid4().hex}"
-    command = [
-        "cocat",
-        "create-user",
-        "--email",
-        email,
-        "--password",
-        password,
-        "--db_path",
-        db_path,
-    ]
-    subprocess.check_call(command)
-    command = [
-        "cocat",
-        "add-user-to-room",
-        "--email",
-        email,
-        "--room_id",
-        room_id,
-        "--db_path",
-        db_path,
-    ]
-    subprocess.check_call(command)
+    create_user(email, password, db_path)
+    add_user_to_room(email, room_id, db_path)
     yield email, password
 
 
