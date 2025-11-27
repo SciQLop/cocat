@@ -11,8 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from wire_file import AsyncFileClient
 from wiredb import AsyncChannel, Room, RoomManager
 
-from .db import get_db
-from .schemas import UserCreate, UserRead, UserUpdate
+from .db import User, get_db
+from .schemas import CocatUser, UserCreate, UserRead, UserUpdate
 from .users import get_backend
 
 
@@ -97,7 +97,7 @@ class CocatApp:  # pragma: nocover
         @app.websocket("/room/{room_id}")
         async def connect_room(
             room_id: str,
-            websocket=Depends(backend.websocket_auth),
+            websocket: WebSocket | None = Depends(backend.websocket_auth),
         ):
             if websocket is None:
                 return
@@ -106,6 +106,12 @@ class CocatApp:  # pragma: nocover
             ywebsocket = YWebSocket(websocket, room_id)
             room = await self.room_manager.get_room(ywebsocket.id)
             await room.serve(ywebsocket)
+
+        @app.get("/rooms", response_model=CocatUser)
+        async def get_rooms(
+            user: User = Depends(backend.current_active_user),
+        ):
+            return user
 
 
 class YWebSocket(AsyncChannel):  # pragma: nocover
