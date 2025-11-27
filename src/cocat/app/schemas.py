@@ -4,17 +4,21 @@ from fastapi_users import schemas
 from pydantic import BaseModel
 
 
-class CocatUser(BaseModel):
+class RoomUsers(BaseModel):
+    users: list[str] = []
+
+
+class UserRooms(BaseModel):
     rooms: list[str] = []
 
 
-class UserRead(schemas.BaseUser[uuid.UUID], CocatUser):
+class UserRead(schemas.BaseUser[uuid.UUID], UserRooms):
     pass
 
 
-class UserCreate(schemas.BaseUserCreate, CocatUser):
+class UserCreate(schemas.BaseUserCreate, UserRooms):
     pass
 
 
-class UserUpdate(schemas.BaseUserUpdate, CocatUser):
+class UserUpdate(schemas.BaseUserUpdate, UserRooms):
     pass

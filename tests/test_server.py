@@ -3,6 +3,7 @@ from uuid import uuid4
 import httpx
 import pytest
 from anyio import fail_after, sleep
+from utils import add_user_to_room, create_user
 from wire_file import AsyncFileClient
 from wire_websocket import AsyncWebSocketClient, AsyncWebSocketServer
 
@@ -127,7 +128,7 @@ async def test_origin(server, user, room_id):
                     break
 
 
-async def test_user(server, user, room_id):
+async def test_api(server, user, room_id, db_path):
     host, port = server
     username, password = user
     data = {"username": username, "password": password}
@@ -141,3 +142,10 @@ async def test_user(server, user, room_id):
 
     response = httpx.get(f"http://{host}:{port}/rooms", cookies=cookies)
     assert response.json() == {"rooms": [room_id]}
+
+    email0 = "user0@example.com"
+    create_user(email=email0, password="pwd", db_path=db_path)
+    add_user_to_room(email=email0, room_id=room_id, db_path=db_path)
+
+    response = httpx.get(f"http://{host}:{port}/room/{room_id}/users", cookies=cookies)
+    assert response.json() == {"users": [username, email0]}
