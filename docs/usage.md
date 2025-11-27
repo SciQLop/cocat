@@ -116,8 +116,20 @@ log_out()
 A command-line interface allows to launch a server and manage users.
 Because the server can only be accessed by authenticated users, one has to create users first:
 
-```py
+```bash
 cocat create-user --email "paul@example.com" --password "my_password" --db-path "users.db"
+```
+
+By default users have no permission to connect to any room. To allow a user in a room:
+
+```bash
+cocat add-user-to-room --email "paul@example.com" --room-id "my_room" --db-path "users.db"
+```
+
+If you wish to remove this user from a room at a later time:
+
+```bash
+cocat remove-user-from-room --email "paul@example.com" --room-id "my_room" --db-path "users.db"
 ```
 
 Then the server can be launched:
