@@ -125,3 +125,19 @@ async def test_origin(server, user, room_id):
                     assert not events0
                     assert events1 == [event0]
                     break
+
+
+async def test_user(server, user, room_id):
+    host, port = server
+    username, password = user
+    data = {"username": username, "password": password}
+    response = httpx.post(f"http://{host}:{port}/auth/jwt/login", data=data)
+    cookie = response.cookies.get("fastapiusersauth")
+    cookies = httpx.Cookies()
+    cookies.set("fastapiusersauth", cookie)
+
+    response = httpx.get(f"http://{host}:{port}/rooms")
+    assert response.json() == {"detail": "Unauthorized"}
+
+    response = httpx.get(f"http://{host}:{port}/rooms", cookies=cookies)
+    assert response.json() == {"rooms": [room_id]}
