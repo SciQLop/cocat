@@ -3,13 +3,12 @@ from fastapi_users.exceptions import UserAlreadyExists
 from httpx_ws import WebSocketUpgradeError
 
 import cocat
-from cocat import (
+from cocat import log_in, set_config
+from cocat.cli import (
     add_user_to_room,
     create_user,
     get_user,
-    log_in,
     remove_user_from_room,
-    set_config,
 )
 
 
