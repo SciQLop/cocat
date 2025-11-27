@@ -1,5 +1,9 @@
 # Version history
 
+## 0.9.0
+
+- Don't export from `cocat.cli`, because it has features that need the `server` extra.
+
 ## 0.8.0
 
 - Add user room permissions (SQLite database is incompatible).
