@@ -22,6 +22,21 @@ from cocat import (
 )
 
 
+def test_user_room(tmp_path, server, user, monkeypatch):
+    with monkeypatch.context() as m:
+        m.setattr(cocat.api, "save_on_exit", lambda: None)
+        host, port = server
+        file_path = tmp_path / "updates.y"
+
+        set_config(
+            host=f"http://{host}",
+            port=port,
+            file_path=file_path,
+        )
+
+        log_in(*user)
+
+
 def test_api(tmp_path, server, user, room_id, monkeypatch):
     with monkeypatch.context() as m:
         m.setattr(cocat.api, "save_on_exit", lambda: None)

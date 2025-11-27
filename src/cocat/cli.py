@@ -1,5 +1,5 @@
-import contextlib
 import traceback
+from contextlib import asynccontextmanager
 
 from anycorn import Config
 from anycorn import serve as anycorn_serve
@@ -130,73 +130,60 @@ async def _serve(
 
 
 async def _create_user(email: str, password: str, is_superuser: bool, db_path: str):
-    db = get_db(db_path)
-    await db.create_db_and_tables()
-    backend = get_backend(db)
-    get_async_session_context = contextlib.asynccontextmanager(db.get_async_session)
-    get_user_db_context = contextlib.asynccontextmanager(db.get_user_db)
-    get_user_manager_context = contextlib.asynccontextmanager(backend.get_user_manager)
-
     try:
-        async with get_async_session_context() as session:
-            async with get_user_db_context(session) as user_db:
-                async with get_user_manager_context(user_db) as user_manager:
-                    user = await user_manager.create(
-                        UserCreate(
-                            email=email, password=password, is_superuser=is_superuser
-                        )
-                    )
-                    print(f"User created {user}")
-                    return user
+        async with get_user_manager(db_path, True) as user_manager:
+            room_id = email[: email.find("@")]
+            user = await user_manager.create(
+                UserCreate(
+                    email=email,
+                    password=password,
+                    is_superuser=is_superuser,
+                    rooms=[room_id],
+                )
+            )
+            print(f"User created {user}")
+            return user
     except UserAlreadyExists:
         print(f"User {email} already exists")
         raise
 
 
 async def _get_user(email: str, db_path: str):
-    db = get_db(db_path)
-    backend = get_backend(db)
-    get_async_session_context = contextlib.asynccontextmanager(db.get_async_session)
-    get_user_db_context = contextlib.asynccontextmanager(db.get_user_db)
-    get_user_manager_context = contextlib.asynccontextmanager(backend.get_user_manager)
-
-    async with get_async_session_context() as session:
-        async with get_user_db_context(session) as user_db:
-            async with get_user_manager_context(user_db) as user_manager:
-                return await user_manager.get_by_email(email)
+    async with get_user_manager(db_path) as user_manager:
+        return await user_manager.get_by_email(email)
 
 
 async def _add_user_to_room(email: str, room_id: str, db_path: str):
-    db = get_db(db_path)
-    backend = get_backend(db)
-    get_async_session_context = contextlib.asynccontextmanager(db.get_async_session)
-    get_user_db_context = contextlib.asynccontextmanager(db.get_user_db)
-    get_user_manager_context = contextlib.asynccontextmanager(backend.get_user_manager)
-
-    async with get_async_session_context() as session:
-        async with get_user_db_context(session) as user_db:
-            async with get_user_manager_context(user_db) as user_manager:
-                user = await user_manager.get_by_email(email)
-                user_update = UserUpdate(
-                    email=user.email,
-                    rooms=list(set(user.rooms) | set([room_id])),
-                )
-                await user_manager.update(user_update, user, False)
+    async with get_user_manager(db_path) as user_manager:
+        user = await user_manager.get_by_email(email)
+        user_update = UserUpdate(
+            email=user.email,
+            rooms=list(set(user.rooms) | set([room_id])),
+        )
+        await user_manager.update(user_update, user, False)
 
 
 async def _remove_user_from_room(email: str, room_id: str, db_path: str):
+    async with get_user_manager(db_path) as user_manager:
+        user = await user_manager.get_by_email(email)
+        user_update = UserUpdate(
+            email=user.email,
+            rooms=list(set(user.rooms) - set([room_id])),
+        )
+        await user_manager.update(user_update, user, False)
+
+
+@asynccontextmanager
+async def get_user_manager(db_path: str, create_db_and_tables: bool = False):
     db = get_db(db_path)
+    if create_db_and_tables:
+        await db.create_db_and_tables()
     backend = get_backend(db)
-    get_async_session_context = contextlib.asynccontextmanager(db.get_async_session)
-    get_user_db_context = contextlib.asynccontextmanager(db.get_user_db)
-    get_user_manager_context = contextlib.asynccontextmanager(backend.get_user_manager)
+    get_async_session_context = asynccontextmanager(db.get_async_session)
+    get_user_db_context = asynccontextmanager(db.get_user_db)
+    get_user_manager_context = asynccontextmanager(backend.get_user_manager)
 
     async with get_async_session_context() as session:
         async with get_user_db_context(session) as user_db:
             async with get_user_manager_context(user_db) as user_manager:
-                user = await user_manager.get_by_email(email)
-                user_update = UserUpdate(
-                    email=user.email,
-                    rooms=list(set(user.rooms) - set([room_id])),
-                )
-                await user_manager.update(user_update, user, False)
+                yield user_manager
