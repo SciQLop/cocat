@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 import httpx
+import keyring
 from wire_file import FileClient
 from wire_websocket import WebSocketClient
 
@@ -107,14 +108,25 @@ def set_config(
     SESSION.set_config(host=host, port=port, file_path=file_path, room_id=room_id)
 
 
-def log_in(username: str, password: str) -> None:
+def log_in(username: str, password: str | None = None, connect: bool = True) -> None:
     """
     Log into the server.
 
     Args:
         username: The username to use to log in.
-        password: The password to use to log in.
+        password: The password to use to log in (defaults to the one previously provided).
+        connect: Whether to connect to the WebSocket after logging in.
     """
+    if password is None:
+        password = keyring.get_password("system", username)
+        if password is None:
+            raise RuntimeError("Password not provided")
+    else:
+        try:
+            keyring.set_password("system", username, password)
+        except Exception:  # pragma: nocover
+            pass
+
     data = {"username": username, "password": password}
     response = httpx.post(
         f"{SESSION.host}:{SESSION.port}/{SESSION.prefix}auth/jwt/login", data=data
@@ -123,8 +135,9 @@ def log_in(username: str, password: str) -> None:
     if cookie is None:
         raise RuntimeError("Wrong username or password")
     SESSION.cookies.set("fastapiusersauth", cookie)
-    room_id = username[: username.find("@")]
-    SESSION.connect(room_id)
+    if connect:
+        room_id = username[: username.find("@")]
+        SESSION.connect(room_id)
 
 
 def log_out() -> None:
