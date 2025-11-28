@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 
 from anycorn import Config
 from anycorn import serve as anycorn_serve
-from anyio import Event, run
+from anyio import Event, create_task_group, run, sleep_forever
+from anyioutils import create_task
 from cyclopts import App
 from fastapi_users.exceptions import UserAlreadyExists
 
@@ -113,20 +114,26 @@ async def _serve(
     config.bind = [f"{host}:{port}"]
     shutdown_event = Event()
     tb = None
-    try:
-        cocat_app = CocatApp(update_dir, db_path)
-        await anycorn_serve(
-            cocat_app.app,  # type: ignore[arg-type]
-            config,
-            shutdown_trigger=shutdown_event.wait,
-            mode="asgi",
-        )
-    except Exception:
-        tb = traceback.format_exc()
-    finally:
-        if tb is not None:
-            print(tb)
-        shutdown_event.set()
+    cocat_app = CocatApp(update_dir, db_path)
+    async with create_task_group() as tg:
+        try:
+            task = create_task(
+                anycorn_serve(
+                    cocat_app.app,  # type: ignore[arg-type]
+                    config,
+                    shutdown_trigger=shutdown_event.wait,
+                    mode="asgi",
+                ),
+                tg,
+            )
+            await sleep_forever()
+        except Exception:
+            tb = traceback.format_exc()
+        finally:
+            if tb is not None:
+                print(tb)
+            shutdown_event.set()
+            await task.wait()
 
 
 async def _create_user(email: str, password: str, is_superuser: bool, db_path: str):
