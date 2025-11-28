@@ -1,5 +1,9 @@
 # Version history
 
+## 0.11.0
+
+- Improve credential storing.
+
 ## 0.10.0
 
 - Stop server gracefully.
