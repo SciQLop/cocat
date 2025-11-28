@@ -33,10 +33,10 @@ Up to now their data is local, but they could share the database using a web ser
 
 ```py
 from anyio import run, sleep_forever
-from wiredb import bind
+from wire_websocket import AsyncWebSocketServer
 
 async def main():
-    async with bind("websocket", host="localhost", port=8000):
+    async with AsyncWebSocketServer(host="localhost", port=8000):
         await sleep_forever()
 
 run(main)
@@ -46,10 +46,10 @@ And here is how user A can connect to this server:
 
 ```py
 from anyio import run, sleep_forever
-from wiredb import connect
+from wire_websocket import AsyncWebSocketClient
 
 async def main():
-    async with connect("websocket", doc=db0.doc, host="http://localhost", port=8000):
+    async with AsyncWebSocketClient(doc=db0.doc, host="http://localhost", port=8000):
         await sleep_forever()
 
 run(main)
@@ -60,11 +60,11 @@ User B on another machine could connect their database to user A's and synchroni
 ```py
 from anyio import run, sleep_forever
 from cocat import DB
-from wiredb import connect
+from wire_websocket import AsyncWebSocketClient
 
 async def main():
     db1 = DB()
-    async with connect("websocket", doc=db1.doc, host="http://localhost", port=8000):
+    async with AsyncWebSocketClient(doc=db1.doc, host="http://localhost", port=8000):
         print(db1.catalogues)
         print(db1.events)
 
