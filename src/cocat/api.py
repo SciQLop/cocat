@@ -108,35 +108,54 @@ def set_config(
     SESSION.set_config(host=host, port=port, file_path=file_path, room_id=room_id)
 
 
-def log_in(username: str, password: str | None = None, connect: bool = True) -> None:
+def log_in(
+    username: str | None = None,
+    password: str | None = None,
+    save_credentials: bool = True,
+    connect: bool = True,
+) -> None:
     """
-    Log into the server.
+    Log into the server, optionally save the credentials and connect to a room.
 
     Args:
         username: The username to use to log in.
-        password: The password to use to log in (defaults to the one previously provided).
-        connect: Whether to connect to the WebSocket after logging in.
+        password: The password to use to log in.
+        save_credentials: Whether to save the given username and/or password.
+        connect: Whether to connect to a room after logging in.
     """
-    if password is None:
-        password = keyring.get_password("system", username)
+    base_url = f"{SESSION.host}:{SESSION.port}/{SESSION.prefix}"
+    credential = None
+    saved_username = None
+    saved_password = None
+    try:
+        credential = keyring.get_credential(base_url, None)
+        if credential is not None:
+            saved_username = credential.username
+            saved_password = credential.password
+    except Exception:  # pragma: nocover
+        pass
+    if save_credentials:
+        if username is None:
+            username = saved_username
         if password is None:
-            raise RuntimeError("Password not provided")
-    else:
-        try:
-            keyring.set_password("system", username, password)
-        except Exception:  # pragma: nocover
-            pass
+            password = saved_password
+
+    if username is None or password is None:
+        raise RuntimeError("Username or password not provided")
+
+    try:
+        keyring.set_password(base_url, username, password)
+    except Exception:  # pragma: nocover
+        pass
 
     data = {"username": username, "password": password}
-    response = httpx.post(
-        f"{SESSION.host}:{SESSION.port}/{SESSION.prefix}auth/jwt/login", data=data
-    )
+    response = httpx.post(f"{base_url}auth/jwt/login", data=data)
     cookie = response.cookies.get("fastapiusersauth")
     if cookie is None:
         raise RuntimeError("Wrong username or password")
     SESSION.cookies.set("fastapiusersauth", cookie)
     if connect:
-        room_id = username[: username.find("@")]
+        room_id = username.split("@")[0]
         SESSION.connect(room_id)
 
 

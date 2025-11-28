@@ -141,7 +141,7 @@ async def test_api(server, user, room_id, db_path):
     assert response.json() == {"detail": "Unauthorized"}
 
     response = httpx.get(f"http://{host}:{port}/rooms", cookies=cookies)
-    user_room_id = username[: username.find("@")]
+    user_room_id = username.split("@")[0]
     assert set(response.json()["rooms"]) == set([room_id, user_room_id])
 
     email0 = "user0@example.com"

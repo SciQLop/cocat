@@ -5,7 +5,7 @@ import time
 import httpx
 import keyring
 import pytest
-from utils import get_password, set_password
+from utils import get_credential, set_password
 from wire_websocket import WebSocketClient
 
 import cocat.api
@@ -27,7 +27,7 @@ from cocat import (
 def test_user_room(tmp_path, server, user, monkeypatch):
     with monkeypatch.context() as m:
         m.setattr(cocat.api, "save_on_exit", lambda: None)
-        m.setattr(keyring, "get_password", get_password)
+        m.setattr(keyring, "get_credential", get_credential)
         m.setattr(keyring, "set_password", set_password)
         host, port = server
         file_path = tmp_path / "updates.y"
@@ -44,7 +44,7 @@ def test_user_room(tmp_path, server, user, monkeypatch):
 def test_api(tmp_path, server, user, room_id, monkeypatch):
     with monkeypatch.context() as m:
         m.setattr(cocat.api, "save_on_exit", lambda: None)
-        m.setattr(keyring, "get_password", get_password)
+        m.setattr(keyring, "get_credential", get_credential)
         m.setattr(keyring, "set_password", set_password)
         host, port = server
         username, password = user
@@ -123,7 +123,7 @@ def test_api(tmp_path, server, user, room_id, monkeypatch):
 def test_login(tmp_path, server, user, room_id, monkeypatch):
     with monkeypatch.context() as m:
         m.setattr(cocat.api, "save_on_exit", lambda: None)
-        m.setattr(keyring, "get_password", get_password)
+        m.setattr(keyring, "get_credential", get_credential)
         m.setattr(keyring, "set_password", set_password)
         host, port = server
         username, password = user
@@ -138,11 +138,11 @@ def test_login(tmp_path, server, user, room_id, monkeypatch):
         with pytest.raises(RuntimeError, match="Not logged in"):
             refresh()
 
-        with pytest.raises(RuntimeError, match="Password not provided"):
+        with pytest.raises(RuntimeError, match="Username or password not provided"):
             log_in(username, connect=False)
 
         log_in(*user, connect=False)
-        log_in(username, connect=False)
+        log_in(connect=False)
 
 
 def test_login_with_port_in_host(tmp_path, server, room_id, monkeypatch):
@@ -166,7 +166,7 @@ def test_login_with_port_in_host(tmp_path, server, room_id, monkeypatch):
 def test_atexit(room_id, server, user, tmp_path, monkeypatch, capsys):
     with monkeypatch.context() as m:
         m.setattr(builtins, "input", lambda _: "yes")
-        m.setattr(keyring, "get_password", get_password)
+        m.setattr(keyring, "get_credential", get_credential)
         m.setattr(keyring, "set_password", set_password)
         host, port = server
         username, password = user
