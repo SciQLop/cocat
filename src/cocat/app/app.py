@@ -50,10 +50,7 @@ class CocatApp:  # pragma: nocover
 
         root_path = os.environ.get("COCAT_PROXY_PREFIX", "")
         if root_path:
-            if not root_path.startswith("/"):
-                root_path = "/" + root_path
-            if root_path.endswith("/"):
-                root_path = root_path[:-1]
+            root_path = "/" + root_path.strip("/")
 
         self.app = app = FastAPI(lifespan=lifespan, root_path=root_path)
 

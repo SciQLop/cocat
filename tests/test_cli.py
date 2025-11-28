@@ -2,7 +2,7 @@ import keyring
 import pytest
 from fastapi_users.exceptions import UserAlreadyExists
 from httpx_ws import WebSocketUpgradeError
-from utils import get_password, set_password
+from utils import get_credential, set_password
 
 import cocat
 from cocat import log_in, set_config
@@ -46,7 +46,7 @@ def test_user(tmp_path, server, room_id, monkeypatch):
 
     with monkeypatch.context() as m:
         m.setattr(cocat.api, "save_on_exit", lambda: None)
-        m.setattr(keyring, "get_password", get_password)
+        m.setattr(keyring, "get_credential", get_credential)
         m.setattr(keyring, "set_password", set_password)
         set_config(
             host=f"http://{host}",

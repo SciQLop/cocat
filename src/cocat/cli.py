@@ -139,7 +139,7 @@ async def _serve(
 async def _create_user(email: str, password: str, is_superuser: bool, db_path: str):
     try:
         async with get_user_manager(db_path, True) as user_manager:
-            room_id = email[: email.find("@")]
+            room_id = email.split("@")[0]
             user = await user_manager.create(
                 UserCreate(
                     email=email,

@@ -1,6 +1,14 @@
 import subprocess
+from dataclasses import dataclass
 
-PASSWORDS: dict[str, str] = {}
+
+@dataclass
+class Credentials:
+    username: str
+    password: str
+
+
+WALLET: dict[str, Credentials] = {}
 
 
 def create_user(email: str, password: str, db_path: str) -> None:
@@ -31,9 +39,9 @@ def add_user_to_room(email: str, room_id: str, db_path: str) -> None:
     subprocess.check_call(command)
 
 
-def get_password(service_name: str, username: str) -> str | None:
-    return PASSWORDS.get(username)
+def get_credential(service_name: str, username: str | None) -> Credentials | None:
+    return WALLET.get(service_name)
 
 
 def set_password(service_name: str, username: str, password: str) -> None:
-    PASSWORDS[username] = password
+    WALLET[service_name] = Credentials(username, password)
