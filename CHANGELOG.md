@@ -1,5 +1,13 @@
 # Version history
 
+## 0.10.0
+
+- Stop server gracefully.
+- Use `keyring` for storing passwords.
+- Automatically connect users to a room which ID is based on their email.
+- Add `GET /room/{room_id}/users` for all users allowed in a room.
+- Add `GET /rooms` for current user allowed rooms.
+
 ## 0.9.0
 
 - Don't export from `cocat.cli`, because it has features that need the `server` extra.
