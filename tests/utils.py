@@ -1,5 +1,7 @@
 import subprocess
 
+PASSWORDS: dict[str, str] = {}
+
 
 def create_user(email: str, password: str, db_path: str) -> None:
     command = [
@@ -27,3 +29,11 @@ def add_user_to_room(email: str, room_id: str, db_path: str) -> None:
         db_path,
     ]
     subprocess.check_call(command)
+
+
+def get_password(service_name: str, username: str) -> str | None:
+    return PASSWORDS.get(username)
+
+
+def set_password(service_name: str, username: str, password: str) -> None:
+    PASSWORDS[username] = password
