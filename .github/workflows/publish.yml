@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: 3.14
       - run: uv build --all-packages
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: dist
           path: dist
