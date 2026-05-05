@@ -1,20 +1,29 @@
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import Any
 
 from anyio import sleep_forever
 from anyio.abc import TaskStatus
-from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from wire_file import AsyncFileClient
 from wiredb import AsyncChannel, Room, RoomManager
 
 from .db import User, get_db
+from ..db import DB as CrdtDB
 from .schemas import RoomUsers, UserCreate, UserRead, UserRooms, UserUpdate
 from .users import get_backend
+
+
+def _dt_to_iso(dt: Any) -> str:
+    """Return ISO 8601 timestamp without timezone suffix."""
+    if isinstance(dt, datetime):
+        return dt.strftime("%Y-%m-%dT%H:%M:%S")
+    return str(dt).replace("Z", "").split("+")[0]
 
 
 class StoredRoom(Room):  # pragma: nocover
@@ -119,6 +128,81 @@ class CocatApp:  # pragma: nocover
             return {
                 "users": [usr.User.email for usr in users if room_id in usr.User.rooms]
             }
+
+        @app.get("/rooms/{room_id}/catalogues")
+        async def get_room_catalogues(
+            room_id: str,
+            user: User = Depends(backend.current_active_user),
+        ):
+            if room_id not in user.rooms:
+                raise HTTPException(status_code=403, detail="Not authorized")
+            room = await self.room_manager.get_room(room_id)
+            crdt_db = CrdtDB(doc=room.doc)
+            return {
+                "catalogues": [
+                    {
+                        "uuid": str(cat._uuid),
+                        "name": cat.name,
+                        "nb_events": len(cat.events),
+                        "author": cat._map.get("author", ""),
+                        "tags": list(cat._map.get("tags", {}).keys() if hasattr(cat._map.get("tags", None), "keys") else []),
+                        "attributes": dict(cat._map.get("attributes", {}) or {}),
+                    }
+                    for cat in crdt_db.catalogues
+                ]
+            }
+
+        @app.get("/catalogues/{uuid}")
+        async def get_catalogue(
+            uuid: str,
+            user: User = Depends(backend.current_active_user),
+        ):
+            for room_id in user.rooms:
+                room = await self.room_manager.get_room(room_id)
+                crdt_db = CrdtDB(doc=room.doc)
+                for cat in crdt_db.catalogues:
+                    if str(cat._uuid) == uuid:
+                        return {
+                            "uuid": uuid,
+                            "room_id": room_id,
+                            "name": cat.name,
+                            "nb_events": len(cat.events),
+                            "author": cat._map.get("author", ""),
+                            "tags": list(cat._map.get("tags", {}).keys() if hasattr(cat._map.get("tags", None), "keys") else []),
+                            "attributes": dict(cat._map.get("attributes", {}) or {}),
+                        }
+            raise HTTPException(status_code=404, detail="Catalogue not found")
+
+        @app.get("/catalogues/{uuid}/events")
+        async def get_catalogue_events(
+            uuid: str,
+            user: User = Depends(backend.current_active_user),
+        ):
+            for room_id in user.rooms:
+                room = await self.room_manager.get_room(room_id)
+                crdt_db = CrdtDB(doc=room.doc)
+                for cat in crdt_db.catalogues:
+                    if str(cat._uuid) == uuid:
+                        events = sorted(cat.events, key=lambda e: e.start)
+                        return {
+                            "uuid": uuid,
+                            "name": cat.name,
+                            "room_id": room_id,
+                            "author": cat._map.get("author", ""),
+                            "tags": list(cat._map.get("tags", {}).keys() if hasattr(cat._map.get("tags", None), "keys") else []),
+                            "events": [
+                                {
+                                    "uuid": str(e._uuid),
+                                    "start": _dt_to_iso(e.start),
+                                    "stop": _dt_to_iso(e.stop),
+                                    "author": e._map.get("author", ""),
+                                    "tags": list(e._map.get("tags", {}).keys() if hasattr(e._map.get("tags", None), "keys") else []),
+                                    "attributes": dict(e._map.get("attributes", {}) or {}),
+                                }
+                                for e in events
+                            ],
+                        }
+            raise HTTPException(status_code=404, detail="Catalogue not found")
 
 
 class YWebSocket(AsyncChannel):  # pragma: nocover
