@@ -13,8 +13,8 @@ from sqlalchemy import select
 from wire_file import AsyncFileClient
 from wiredb import AsyncChannel, Room, RoomManager
 
-from .db import User, get_db
 from ..db import DB as CrdtDB
+from .db import User, get_db
 from .schemas import RoomUsers, UserCreate, UserRead, UserRooms, UserUpdate
 from .users import get_backend
 
@@ -145,7 +145,11 @@ class CocatApp:  # pragma: nocover
                         "name": cat.name,
                         "nb_events": len(cat.events),
                         "author": cat._map.get("author", ""),
-                        "tags": list(cat._map.get("tags", {}).keys() if hasattr(cat._map.get("tags", None), "keys") else []),
+                        "tags": list(
+                            cat._map.get("tags", {}).keys()
+                            if hasattr(cat._map.get("tags", None), "keys")
+                            else []
+                        ),
                         "attributes": dict(cat._map.get("attributes", {}) or {}),
                     }
                     for cat in crdt_db.catalogues
@@ -168,7 +172,11 @@ class CocatApp:  # pragma: nocover
                             "name": cat.name,
                             "nb_events": len(cat.events),
                             "author": cat._map.get("author", ""),
-                            "tags": list(cat._map.get("tags", {}).keys() if hasattr(cat._map.get("tags", None), "keys") else []),
+                            "tags": list(
+                                cat._map.get("tags", {}).keys()
+                                if hasattr(cat._map.get("tags", None), "keys")
+                                else []
+                            ),
                             "attributes": dict(cat._map.get("attributes", {}) or {}),
                         }
             raise HTTPException(status_code=404, detail="Catalogue not found")
@@ -189,15 +197,25 @@ class CocatApp:  # pragma: nocover
                             "name": cat.name,
                             "room_id": room_id,
                             "author": cat._map.get("author", ""),
-                            "tags": list(cat._map.get("tags", {}).keys() if hasattr(cat._map.get("tags", None), "keys") else []),
+                            "tags": list(
+                                cat._map.get("tags", {}).keys()
+                                if hasattr(cat._map.get("tags", None), "keys")
+                                else []
+                            ),
                             "events": [
                                 {
                                     "uuid": str(e._uuid),
                                     "start": _dt_to_iso(e.start),
                                     "stop": _dt_to_iso(e.stop),
                                     "author": e._map.get("author", ""),
-                                    "tags": list(e._map.get("tags", {}).keys() if hasattr(e._map.get("tags", None), "keys") else []),
-                                    "attributes": dict(e._map.get("attributes", {}) or {}),
+                                    "tags": list(
+                                        e._map.get("tags", {}).keys()
+                                        if hasattr(e._map.get("tags", None), "keys")
+                                        else []
+                                    ),
+                                    "attributes": dict(
+                                        e._map.get("attributes", {}) or {}
+                                    ),
                                 }
                                 for e in events
                             ],

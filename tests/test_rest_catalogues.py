@@ -74,8 +74,18 @@ async def test_catalogue_and_events(server, user, room_id):
 
     # not found
     fake_uuid = str(uuid4())
-    assert httpx.get(f"http://{host}:{port}/catalogues/{fake_uuid}", cookies=cookies).status_code == 404
-    assert httpx.get(f"http://{host}:{port}/catalogues/{fake_uuid}/events", cookies=cookies).status_code == 404
+    assert (
+        httpx.get(
+            f"http://{host}:{port}/catalogues/{fake_uuid}", cookies=cookies
+        ).status_code
+        == 404
+    )
+    assert (
+        httpx.get(
+            f"http://{host}:{port}/catalogues/{fake_uuid}/events", cookies=cookies
+        ).status_code
+        == 404
+    )
 
     # create data
     async with AsyncWebSocketClient(
@@ -103,7 +113,9 @@ async def test_catalogue_and_events(server, user, room_id):
     assert data["nb_events"] == 2
 
     # GET /catalogues/{uuid}/events — sorted by start
-    response = httpx.get(f"http://{host}:{port}/catalogues/{cat_uuid}/events", cookies=cookies)
+    response = httpx.get(
+        f"http://{host}:{port}/catalogues/{cat_uuid}/events", cookies=cookies
+    )
     assert response.status_code == 200
     events = response.json()["events"]
     assert len(events) == 2
