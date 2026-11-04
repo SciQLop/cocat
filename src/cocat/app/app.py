@@ -14,6 +14,7 @@ from wiredb import AsyncChannel, Room, RoomManager
 
 from .db import User, get_db
 from .schemas import RoomUsers, UserCreate, UserRead, UserRooms, UserUpdate
+from .secret import load_secret
 from .users import get_backend
 
 
@@ -38,7 +39,7 @@ class StoredRoom(Room):  # pragma: nocover
 class CocatApp:  # pragma: nocover
     def __init__(self, update_dir: str, db_path: str = "./test.db") -> None:
         db = get_db(db_path)
-        backend = get_backend(db)
+        backend = get_backend(db, load_secret(Path(f"{db_path}.secret")))
 
         @asynccontextmanager
         async def lifespan(app: FastAPI):

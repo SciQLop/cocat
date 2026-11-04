@@ -1,5 +1,6 @@
 import traceback
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from anycorn import Config
 from anycorn import serve as anycorn_serve
@@ -11,6 +12,7 @@ from fastapi_users.exceptions import UserAlreadyExists
 from .app.app import CocatApp
 from .app.db import get_db
 from .app.schemas import UserCreate, UserUpdate
+from .app.secret import load_secret
 from .app.users import get_backend
 
 app = App()
@@ -185,7 +187,7 @@ async def get_user_manager(db_path: str, create_db_and_tables: bool = False):
     db = get_db(db_path)
     if create_db_and_tables:
         await db.create_db_and_tables()
-    backend = get_backend(db)
+    backend = get_backend(db, load_secret(Path(f"{db_path}.secret")))
     get_async_session_context = asynccontextmanager(db.get_async_session)
     get_user_db_context = asynccontextmanager(db.get_user_db)
     get_user_manager_context = asynccontextmanager(backend.get_user_manager)

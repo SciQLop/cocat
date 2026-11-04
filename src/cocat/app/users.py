@@ -11,31 +11,24 @@ from fastapi_users.authentication import (
 )
 from fastapi_users.db import SQLAlchemyUserDatabase
 
-from .db import User
-
-SECRET = str(uuid.uuid4())
+from .db import DB, User
 
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
-    reset_password_token_secret = SECRET
-    verification_token_secret = SECRET
-
-    async def on_after_register(self, user: User, request: Request | None = None):
+    async def on_after_register(
+        self, user: User, request: Request | None = None
+    ) -> None:
         print(f"User {user.id} has registered.")
 
     async def on_after_forgot_password(
         self, user: User, token: str, request: Request | None = None
-    ):
-        print(
-            f"User {user.id} has forgot their password. Reset token: {token}"
-        )  # pragma: nocover
+    ) -> None:
+        print(f"User {user.id} requested a password reset.")
 
     async def on_after_request_verify(
         self, user: User, token: str, request: Request | None = None
-    ):
-        print(
-            f"Verification requested for user {user.id}. Verification token: {token}"
-        )  # pragma: nocover
+    ) -> None:
+        print(f"User {user.id} requested a verification.")
 
 
 @dataclass
@@ -48,11 +41,14 @@ class Backend:
     websocket_auth: Any
 
 
-def get_backend(db) -> Backend:
+def get_backend(db: DB, secret: str) -> Backend:
     async def get_user_manager(
         user_db: SQLAlchemyUserDatabase = Depends(db.get_user_db),
     ):
-        yield UserManager(user_db)
+        user_manager = UserManager(user_db)
+        user_manager.reset_password_token_secret = secret
+        user_manager.verification_token_secret = secret
+        yield user_manager
 
     async def websocket_auth(
         websocket: WebSocket,
@@ -72,7 +68,7 @@ def get_backend(db) -> Backend:
         return None
 
     def get_jwt_strategy() -> JWTStrategy[models.UP, models.ID]:  # pragma: nocover
-        return JWTStrategy(secret=SECRET, lifetime_seconds=3600)
+        return JWTStrategy(secret=secret, lifetime_seconds=3600)
 
     auth_backend: AuthenticationBackend = AuthenticationBackend(
         name="cookie",
