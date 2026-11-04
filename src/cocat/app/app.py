@@ -1,4 +1,5 @@
 import os
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
@@ -6,16 +7,35 @@ from typing import Any
 
 from anyio import sleep_forever
 from anyio.abc import TaskStatus
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute, APIRouter
 from sqlalchemy import select
 from wire_file import AsyncFileClient
 from wiredb import AsyncChannel, Room, RoomManager
 
 from .db import User, get_db
+from .ratelimit import RateLimiter, limit
 from .schemas import RoomUsers, UserCreate, UserRead, UserRooms, UserUpdate
 from .secret import load_secret
 from .users import get_backend
+
+
+def with_route_dependency(
+    router: APIRouter, path: str, dependency: Callable[[Request], None]
+) -> APIRouter:
+    for route in router.routes:
+        if isinstance(route, APIRoute) and route.path == path:
+            route.dependencies.append(Depends(dependency))
+            return router
+    raise ValueError(f"No route {path} on the router")
 
 
 class StoredRoom(Room):  # pragma: nocover
@@ -66,8 +86,15 @@ class CocatApp:  # pragma: nocover
             active=True, superuser=True
         )
 
+        limiter = RateLimiter(10, 60.0)
+        check_limit = limit(limiter)
+
         app.include_router(
-            backend.fastapi_users.get_auth_router(backend.auth_backend),
+            with_route_dependency(
+                backend.fastapi_users.get_auth_router(backend.auth_backend),
+                "/login",
+                check_limit,
+            ),
             prefix="/auth/jwt",
             tags=["auth"],
         )
@@ -78,7 +105,11 @@ class CocatApp:  # pragma: nocover
             dependencies=[Depends(current_superuser)],
         )
         app.include_router(
-            backend.fastapi_users.get_reset_password_router(),
+            with_route_dependency(
+                backend.fastapi_users.get_reset_password_router(),
+                "/forgot-password",
+                check_limit,
+            ),
             prefix="/auth",
             tags=["auth"],
         )
