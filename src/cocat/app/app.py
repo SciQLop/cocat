@@ -23,6 +23,8 @@ from wiredb import AsyncChannel, Room, RoomManager
 
 from .db import User, get_db
 from .ratelimit import RateLimiter, limit
+from .rooms import RoomError
+from .routes import make_api_router, room_error_handler
 from .schemas import RoomUsers, UserCreate, UserRead, UserRooms, UserUpdate
 from .secret import load_secret
 from .users import get_backend
@@ -123,6 +125,8 @@ class CocatApp:  # pragma: nocover
             prefix="/users",
             tags=["users"],
         )
+        app.add_exception_handler(RoomError, room_error_handler)
+        app.include_router(make_api_router(db, backend), prefix="/api")
 
         @app.websocket("/room/{room_id}")
         async def connect_room(
