@@ -63,6 +63,7 @@ docs = [
 
 [project.optional-dependencies]
 server = [
+  "alembic >=1.16,<2",
   "fastapi >=0.120.3,<0.163.0",
   "fastapi-users[sqlalchemy] >=15.0.1,<16.0.0",
   "anycorn >=0.18.2,<0.21.0",

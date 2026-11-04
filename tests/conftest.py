@@ -1,12 +1,10 @@
 import os
 import signal
 import subprocess
-import time
 from uuid import uuid4
 
 import pytest
-import requests
-from utils import add_user_to_room, create_user
+from utils import add_user_to_room, create_user, wait_for_server
 
 
 @pytest.fixture()
@@ -52,13 +50,7 @@ def server(free_tcp_port: int, update_dir: str, db_path: str):
     ]
     p = subprocess.Popen(command)
     url = f"http://{host}:{free_tcp_port}"
-    while True:
-        try:
-            requests.get(url)
-        except requests.exceptions.ConnectionError:
-            time.sleep(0.1)
-        else:
-            break
+    wait_for_server(url, p)
     yield host, free_tcp_port
     os.kill(p.pid, signal.SIGINT)
     p.wait()

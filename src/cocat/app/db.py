@@ -1,15 +1,21 @@
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 
-from anyio import Lock, Path
+from alembic import command
+from alembic.config import Config
+from anyio import Lock
 from fastapi import Depends
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID, SQLAlchemyUserDatabase
 from fastapi_users_db_sqlalchemy.access_token import (
     SQLAlchemyBaseAccessTokenTableUUID,
 )
-from sqlalchemy import JSON, Column
+from sqlalchemy import JSON, Column, Connection, event, inspect
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+
+_MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
 class Base(DeclarativeBase):
@@ -22,6 +28,26 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
 
 class AccessToken(SQLAlchemyBaseAccessTokenTableUUID, Base):
     pass
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def migration_config(connection: Connection | None = None) -> Config:
+    config = Config()
+    config.set_main_option("script_location", str(_MIGRATIONS_DIR))
+    if connection is not None:
+        config.attributes["connection"] = connection
+    return config
+
+
+def run_migrations(sync_conn: Connection) -> None:
+    config = migration_config(sync_conn)
+    inspector = inspect(sync_conn)
+    if inspector.has_table("user") and not inspector.has_table("alembic_version"):
+        command.stamp(config, "0001")
+    command.upgrade(config, "head")
 
 
 @dataclass
@@ -38,13 +64,15 @@ def get_db(path: str) -> DB:
     async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
     lock = Lock()
 
-    async def create_db_and_tables():
-        async with lock:
-            if await Path(path).exists():
-                return
+    @event.listens_for(engine.sync_engine, "connect")
+    def _enable_foreign_keys(dbapi_connection, _connection_record) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
-            async with engine.begin() as conn:  # pragma: nocover
-                await conn.run_sync(Base.metadata.create_all)
+    async def create_db_and_tables():
+        async with lock, engine.begin() as conn:
+            await conn.run_sync(run_migrations)
 
     async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         async with async_session_maker() as session:

@@ -1,9 +1,10 @@
+from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
 import pytest
 from anyio import fail_after, sleep
-from utils import add_user_to_room, create_user
+from utils import add_user_to_room, create_user, wait_for_server
 from wire_file import AsyncFileClient
 from wire_websocket import AsyncWebSocketClient, AsyncWebSocketServer
 
@@ -195,3 +196,17 @@ def test_self_update_excludes_rooms():
     user_update = UserUpdate(email="a@b.c", rooms=["stolen_room"])
     assert "rooms" not in user_update.create_update_dict()
     assert user_update.create_update_dict_superuser()["rooms"] == ["stolen_room"]
+
+
+def test_wait_for_server_raises_when_process_exited():
+    process = SimpleNamespace(poll=lambda: 1, returncode=1)
+
+    with pytest.raises(RuntimeError, match="Server exited with code 1"):
+        wait_for_server("http://127.0.0.1:1", process)
+
+
+def test_wait_for_server_raises_when_never_ready():
+    process = SimpleNamespace(poll=lambda: None, returncode=None)
+
+    with pytest.raises(RuntimeError, match="did not start within 0 s"):
+        wait_for_server("http://127.0.0.1:1", process, timeout=0)
