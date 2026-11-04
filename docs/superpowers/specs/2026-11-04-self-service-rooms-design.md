@@ -33,14 +33,16 @@ A web UI handles everything around the data: accounts, rooms, members, invitatio
 4. Owners can change roles, remove members, and revoke links. Members can leave.
 5. SciQLop shows room names and roles, can create a room, and can accept an invitation.
 6. The current SciQLop plugin keeps working while all this lands.
-7. Users can log in with their institution account (Shibboleth / eduGAIN, e.g. RENATER)
-   or ORCID, as well as with an email and password.
-8. SciQLop logs in through the browser, so it never needs to store a password.
+7. Users can log in with ORCID as well as with an email and password.
 
 ## Non-goals (for now)
 
 - Editing catalogues in the browser. SciQLop does the editing.
-- Speaking SAML inside cocat. Shibboleth is reached through an OIDC broker (see below).
+- Shibboleth / eduGAIN (RENATER) login. It needs a SAML-to-OIDC broker and federation
+  paperwork, which isn't worth it yet. Because providers are configuration, it can be
+  added later through a broker such as EGI Check-in without a redesign.
+- Browser-based login in SciQLop. It only becomes necessary once SSO-only users need
+  the desktop client (see "Later").
 - Per-catalogue permissions. Access is granted per room, like a shared folder.
 - Organisations or teams as a separate concept.
 
@@ -121,43 +123,15 @@ the room and the minimum role. Every route calls it.
 - The UI calls the same Python service functions as the REST API, not HTTP.
   One implementation, two front ends.
 
-### Login and SSO
+### Login
 
-Academic federations (RENATER's FER, eduGAIN) speak SAML through Shibboleth.
-cocat speaks only OpenID Connect (OIDC) and lets a broker translate:
-
-```
-institution IdP --SAML--> broker (EGI Check-in, or a self-hosted Keycloak/SATOSA) --OIDC--> cocat
-```
-
-- **cocat side.** fastapi-users' OAuth router with `httpx_oauth.clients.openid.OpenID`.
-  It only needs a discovery URL, a client id and a secret.
-  Providers come from configuration: a list of `{name, discovery_url, client_id, client_secret}`.
-  Adding a provider means adding an entry, not writing code.
-- **Default broker: EGI Check-in.** It is registered in eduGAIN, and it exposes all eduGAIN
-  institutions, RENATER included, through one OIDC client. We get every institution
-  without signing a SAML agreement ourselves.
-  Fallback: a Keycloak instance on the lab's cluster, registered as a SAML service provider
-  with RENATER and acting as the OIDC provider for cocat.
-- **ORCID** is configured directly. It speaks OIDC natively, and most scientists have one.
-- **Password accounts stay**, for people with no institutional login.
-- **Account linking is by verified email.** Someone who first registers with a password
-  and later logs in with their institution lands in the same account. Only providers that
-  verify email addresses are trusted for linking. That is a per-provider flag in the config.
-
-**SciQLop login (desktop).** With SSO there is no password to send, so the plugin logs in
-through the browser. This follows RFC 8252, the standard for native apps:
-
-1. SciQLop starts a one-shot HTTP listener on `127.0.0.1:<random port>`.
-2. It opens the browser on `/ui/login?redirect=http://127.0.0.1:<port>/callback`.
-3. The user logs in any way they like: password, institution, or ORCID.
-4. The server redirects to the loopback address with a one-time code.
-5. SciQLop exchanges the code for a long-lived personal access token and stores it in the keyring.
-
-This needs one more table, `access_token`: hash, user, label ("SciQLop on my laptop"),
-`created_at`, `last_used_at`, `expires_at`. Users see and revoke these on their account page.
-The websocket and the REST API accept the token as a bearer header as well as the cookie.
-The current plugin's email-and-password login keeps working for password accounts.
+- Email and password, with email verification, as fastapi-users provides.
+- **ORCID** through fastapi-users' OAuth router and `httpx_oauth.clients.openid.OpenID`,
+  which needs only a discovery URL, a client id and a secret. The client is registered
+  on orcid.org; there is no federation agreement.
+- Providers come from configuration, a list of `{name, discovery_url, client_id,
+  client_secret}`, so more can be added later without code.
+- Accounts are linked by verified email, so password and ORCID logins reach the same account.
 
 ### Email
 
@@ -196,15 +170,14 @@ Each phase can ship on its own, and the current plugin keeps working after each 
      works behind the `/cocat/` proxy prefix.
    - If anycorn fails, switch `cocat serve` to uvicorn: anycorn isn't load-bearing.
    - Then build the pages above.
-3. **Email and SSO.** SMTP sender, verification, reset, invitation emails.
-   OIDC providers from configuration: ORCID first, since it has no paperwork,
-   then EGI Check-in. Account linking by verified email. Personal access tokens and the
-   loopback login endpoint.
-4. **SciQLop plugin.** Browser login, room names and roles, create, share, join with link,
-   viewer mode.
+3. **Email and ORCID.** SMTP sender, verification, reset, invitation emails.
+   ORCID login in the web UI.
+4. **SciQLop plugin.** Room names and roles, create, share, join with link, viewer mode.
 5. **Enforcement.** Viewer write-blocking on the websocket. Kick on removal or deletion.
 6. **Later.** Presence ("who's here", using the CRDT awareness protocol). A read-only
    catalogue view in the browser. Per-user quotas on room count and room size.
+   Shibboleth/eduGAIN through a broker, plus browser login for SciQLop
+   (RFC 8252 loopback flow, personal access tokens), if users ask for it.
 
 Phases 1 and 2 give the "Google Doc" feel. Phase 5 makes the viewer role trustworthy.
 Until phase 5, the UI only offers owner and editor.
@@ -218,8 +191,6 @@ Until phase 5, the UI only offers owner and editor.
 - **Open registration on a lab server invites abuse.** Mitigations: email verification,
   rate limits, quotas, and an optional allow-list of email domains.
 - **pycrdt is stuck below 0.13** until wiredb moves.
-- **Broker registration is paperwork with a lead time.** Start the EGI Check-in client
-  request (or the RENATER SP registration for Keycloak) during phase 0, so it is ready by
-  phase 3. The current EGI procedure was not checked in detail.
-- **Email trust varies between institutions.** Some IdPs don't release a verified email.
-  Those users need a second step: confirm an email address before linking.
+- **ORCID often hides the email address.** Users can keep their ORCID email private,
+  and then there's nothing to link on. Such users confirm an email in the web UI
+  after their first ORCID login.
