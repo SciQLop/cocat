@@ -143,7 +143,7 @@ async def test_api(server, user, room_id, db_path):
 
     response = httpx.get(f"http://{host}:{port}/rooms", cookies=cookies)
     user_room_id = username.split("@")[0]
-    assert set(response.json()["rooms"]) == set([room_id, user_room_id])
+    assert set(response.json()["rooms"]) == {room_id, user_room_id}
 
     email0 = "user0@example.com"
     create_user(email=email0, password="pwd", db_path=db_path)

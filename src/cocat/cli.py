@@ -127,7 +127,7 @@ async def _serve(
                 tg,
             )
             await sleep_forever()
-        except Exception:
+        except Exception:  # noqa: BLE001 -- log any crash, then shut down cleanly
             tb = traceback.format_exc()
         finally:
             if tb is not None:
@@ -165,7 +165,7 @@ async def _add_user_to_room(email: str, room_id: str, db_path: str):
         user = await user_manager.get_by_email(email)
         user_update = UserUpdate(
             email=user.email,
-            rooms=list(set(user.rooms) | set([room_id])),
+            rooms=list(set(user.rooms) | {room_id}),
         )
         await user_manager.update(user_update, user, False)
 
@@ -175,7 +175,7 @@ async def _remove_user_from_room(email: str, room_id: str, db_path: str):
         user = await user_manager.get_by_email(email)
         user_update = UserUpdate(
             email=user.email,
-            rooms=list(set(user.rooms) - set([room_id])),
+            rooms=list(set(user.rooms) - {room_id}),
         )
         await user_manager.update(user_update, user, False)
 
@@ -190,7 +190,9 @@ async def get_user_manager(db_path: str, create_db_and_tables: bool = False):
     get_user_db_context = asynccontextmanager(db.get_user_db)
     get_user_manager_context = asynccontextmanager(backend.get_user_manager)
 
-    async with get_async_session_context() as session:
-        async with get_user_db_context(session) as user_db:
-            async with get_user_manager_context(user_db) as user_manager:
-                yield user_manager
+    async with (
+        get_async_session_context() as session,
+        get_user_db_context(session) as user_db,
+        get_user_manager_context(user_db) as user_manager,
+    ):
+        yield user_manager

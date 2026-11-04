@@ -36,13 +36,13 @@ def test_user(tmp_path, server, room_id, monkeypatch):
 
     user = get_user(email=email, db_path=db_path)
     assert user.email == email
-    assert set(user.rooms) == set([room_id0, room_id1, "a"])
+    assert set(user.rooms) == {room_id0, room_id1, "a"}
 
     remove_user_from_room(email=email, room_id=room_id1, db_path=db_path)
 
     user = get_user(email=email, db_path=db_path)
     assert user.email == email
-    assert set(user.rooms) == set([room_id0, "a"])
+    assert set(user.rooms) == {room_id0, "a"}
 
     with monkeypatch.context() as m:
         m.setattr(cocat.api, "save_on_exit", lambda: None)

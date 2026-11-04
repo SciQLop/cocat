@@ -80,3 +80,8 @@ module-name = "cocat"
 
 [tool.ruff]
 lint.extend-select = ["I"]
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI's dependency injection is declared as `Depends(...)` argument defaults.
+"src/cocat/app/*" = ["B008"]
+"tests/*" = ["ASYNC210", "SIM117"]

@@ -126,7 +126,7 @@ def test_login(tmp_path, server, user, room_id, monkeypatch):
         m.setattr(keyring, "get_credential", get_credential)
         m.setattr(keyring, "set_password", set_password)
         host, port = server
-        username, password = user
+        username, _password = user
         file_path = tmp_path / "updates.y"
         set_config(
             host=f"http://{host}",

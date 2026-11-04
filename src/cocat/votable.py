@@ -142,11 +142,9 @@ def export_votable(catalogues: Sequence[Catalogue] | Catalogue) -> "VOTableFile"
 
     attributes = list(ATTRIBUTES)
 
-    all_attributes = set(
-        attribute
-        for catalogue in catalogue_list
-        for attribute in catalogue.attributes.keys()
-    )
+    all_attributes = {
+        attribute for catalogue in catalogue_list for attribute in catalogue.attributes
+    }
     common_attributes = set.intersection(
         *[set(catalogue.attributes) for catalogue in catalogue_list]
     )
@@ -155,11 +153,9 @@ def export_votable(catalogues: Sequence[Catalogue] | Catalogue) -> "VOTableFile"
         table = TableElement(votable, name=catalogue.name.replace(" ", "_"))
         resource.tables.append(table)
 
-        all_attributes = set(
-            attribute
-            for event in catalogue.events
-            for attribute in event.attributes.keys()
-        )
+        all_attributes = {
+            attribute for event in catalogue.events for attribute in event.attributes
+        }
         common_attributes = set.intersection(
             *[set(event.attributes) for event in catalogue.events]
         )
@@ -174,7 +170,7 @@ def export_votable(catalogues: Sequence[Catalogue] | Catalogue) -> "VOTableFile"
         for attr in sorted(all_attributes):
             # check that the type of all attribute values is identical
             attrs_value_types = list(
-                set(type(event.attributes[attr]) for event in catalogue.events)
+                {type(event.attributes[attr]) for event in catalogue.events}
             )
             if len(attrs_value_types) != 1:
                 raise ValueError(
@@ -263,8 +259,8 @@ def import_votable(
             "events": [],
         }
 
-        has_author_field = any(f[1] == "author" for f in fields_vs_index.keys())
-        has_uuid_field = any(f[1] == "uuid" for f in fields_vs_index.keys())
+        has_author_field = any(f[1] == "author" for f in fields_vs_index)
+        has_uuid_field = any(f[1] == "uuid" for f in fields_vs_index)
 
         for el in table.array:
             event: dict[str, Any] = {"attributes": {}}

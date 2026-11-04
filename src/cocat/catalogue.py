@@ -34,7 +34,7 @@ class Catalogue(Mixin):
         if self._uuid not in self._db._catalogue_maps:
             raise RuntimeError("Catalogue has been deleted")
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         self._check_deleted()
         if not isinstance(other, Catalogue):
             return NotImplemented
@@ -97,14 +97,14 @@ class Catalogue(Mixin):
     def _new(cls, model: CatalogueModel, db: "DB") -> Self:
         uuid = str(model.uuid)
         map = Map(
-            dict(
-                uuid=uuid,
-                name=model.name,
-                author=model.author,
-                tags=Map({val: True for val in model.tags}),
-                events=Map({val: True for val in model.events}),
-                attributes=Map(model.attributes),
-            )
+            {
+                "uuid": uuid,
+                "name": model.name,
+                "author": model.author,
+                "tags": Map({val: True for val in model.tags}),
+                "events": Map({val: True for val in model.events}),
+                "attributes": Map(model.attributes),
+            }
         )
         self = cls(uuid, map, db)
         db._catalogues[uuid] = self
@@ -135,7 +135,7 @@ class Catalogue(Mixin):
         self._check_deleted()
         dct = self._map.to_py()
         assert dct is not None
-        dct["tags"] = list(sorted(dct["tags"].keys()))
+        dct["tags"] = sorted(dct["tags"].keys())
         dct["events"] = [
             uuid if event_as_uuid else Event._from_uuid(uuid, self._db).to_dict()
             for uuid in sorted(dct["events"].keys())
@@ -144,11 +144,9 @@ class Catalogue(Mixin):
         if not event_as_uuid:
             events = dct["events"]
             for idx, event_dict in enumerate(events):
-                event_dict = {
-                    key: event_dict[key] for key in EventModel.model_fields.keys()
-                }
+                event_dict = {key: event_dict[key] for key in EventModel.model_fields}
                 events[idx] = event_dict
-        return {key: dct[key] for key in CatalogueModel.model_fields.keys()}
+        return {key: dct[key] for key in CatalogueModel.model_fields}
 
     def on_change_name(self, callback: Callable[[str], None]) -> None:
         """
@@ -303,7 +301,7 @@ class Catalogue(Mixin):
         event_uuids = cast(Map, self._map["events"])
         return {
             Event._from_map(self._db._event_maps[uuid], self._db)
-            for uuid in event_uuids.keys()
+            for uuid in event_uuids.keys()  # noqa: SIM118 -- pycrdt mistypes Map.__iter__
         }
 
     @events.setter

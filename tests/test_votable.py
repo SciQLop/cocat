@@ -133,7 +133,7 @@ def test_export_import(tmp_path):
 
     assert db.events == {event0, event1}
     assert len(db.catalogues) == 1
-    assert list(db.catalogues)[0].name == catalogue.name
+    assert next(iter(db.catalogues)).name == catalogue.name
 
     votable_str = export_votable_str(catalogue)
 
@@ -142,7 +142,7 @@ def test_export_import(tmp_path):
 
     assert db.events == {event0, event1}
     assert len(db.catalogues) == 1
-    assert list(db.catalogues)[0].name == catalogue.name
+    assert next(iter(db.catalogues)).name == catalogue.name
 
 
 def test_import_file():
@@ -151,7 +151,7 @@ def test_import_file():
     import_votable_file(table, db)
 
     assert len(db.catalogues) == 1
-    catalogue = list(db.catalogues)[0]
+    catalogue = next(iter(db.catalogues))
     assert catalogue.name == "Dst_Li2020"
     assert len(db.events) == 95
     assert len(catalogue.events) == 95

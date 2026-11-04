@@ -1,9 +1,9 @@
 import atexit
-from collections.abc import Iterable
-from contextlib import ExitStack
+from collections.abc import Iterable, Sequence
+from contextlib import ExitStack, suppress
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -127,13 +127,12 @@ def log_in(
     credential = None
     saved_username = None
     saved_password = None
-    try:
+    # keyring backends raise many unrelated exception types; storage is best-effort
+    with suppress(Exception):
         credential = keyring.get_credential(base_url, None)
         if credential is not None:
             saved_username = credential.username
             saved_password = credential.password
-    except Exception:  # pragma: nocover
-        pass
     if save_credentials:
         if username is None:
             username = saved_username
@@ -143,10 +142,8 @@ def log_in(
     if username is None or password is None:
         raise RuntimeError("Username or password not provided")
 
-    try:
+    with suppress(Exception):
         keyring.set_password(base_url, username, password)
-    except Exception:  # pragma: nocover
-        pass
 
     data = {"username": username, "password": password}
     response = httpx.post(f"{base_url}auth/jwt/login", data=data)
@@ -207,8 +204,8 @@ def create_catalogue(
 
 def create_event(
     *,
-    start: datetime | int | float | str,
-    stop: datetime | int | float | str,
+    start: datetime | float | str,
+    stop: datetime | float | str,
     author: str,
     uuid: UUID | str | bytes | bytearray | None = None,
     tags: list[str] | None = None,
