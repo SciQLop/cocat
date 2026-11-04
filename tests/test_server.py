@@ -8,6 +8,7 @@ from wire_file import AsyncFileClient
 from wire_websocket import AsyncWebSocketClient, AsyncWebSocketServer
 
 from cocat import DB
+from cocat.app.schemas import UserUpdate
 
 pytestmark = pytest.mark.anyio
 
@@ -150,3 +151,47 @@ async def test_api(server, user, room_id, db_path):
 
     response = httpx.get(f"http://{host}:{port}/room/{room_id}/users", cookies=cookies)
     assert response.json() == {"users": [username, email0]}
+
+
+def login(host, port, username, password) -> httpx.Cookies:
+    data = {"username": username, "password": password}
+    response = httpx.post(f"http://{host}:{port}/auth/jwt/login", data=data)
+    cookies = httpx.Cookies()
+    cookies.set("fastapiusersauth", response.cookies["fastapiusersauth"])
+    return cookies
+
+
+def test_user_cannot_grant_self_room(server, user):
+    host, port = server
+    cookies = login(host, port, *user)
+
+    response = httpx.patch(
+        f"http://{host}:{port}/users/me",
+        json={"rooms": ["stolen_room"]},
+        cookies=cookies,
+    )
+    assert response.status_code == 200
+
+    response = httpx.get(f"http://{host}:{port}/rooms", cookies=cookies)
+    assert "stolen_room" not in response.json()["rooms"]
+
+
+def test_room_users_requires_room_member(server, user, room_id, db_path):
+    host, port = server
+    url = f"http://{host}:{port}/room/{room_id}/users"
+
+    assert httpx.get(url).status_code == 401
+
+    outsider, password = "outsider@example.com", "pwd"
+    create_user(email=outsider, password=password, db_path=db_path)
+    outsider_cookies = login(host, port, outsider, password)
+    assert httpx.get(url, cookies=outsider_cookies).status_code == 403
+
+    member_cookies = login(host, port, *user)
+    assert httpx.get(url, cookies=member_cookies).json() == {"users": [user[0]]}
+
+
+def test_self_update_excludes_rooms():
+    user_update = UserUpdate(email="a@b.c", rooms=["stolen_room"])
+    assert "rooms" not in user_update.create_update_dict()
+    assert user_update.create_update_dict_superuser()["rooms"] == ["stolen_room"]

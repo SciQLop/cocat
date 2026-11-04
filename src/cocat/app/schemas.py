@@ -21,4 +21,9 @@ class UserCreate(schemas.BaseUserCreate, UserRooms):
 
 
 class UserUpdate(schemas.BaseUserUpdate, UserRooms):
-    pass
+    def create_update_dict(self):
+        # fastapi-users uses this "safe" dict for self-service updates (PATCH /users/me);
+        # room membership is the access control, so only admins may change it.
+        update_dict = super().create_update_dict()
+        update_dict.pop("rooms", None)
+        return update_dict

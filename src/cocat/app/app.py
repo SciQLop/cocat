@@ -6,7 +6,7 @@ from typing import Any
 
 from anyio import sleep_forever
 from anyio.abc import TaskStatus
-from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from wire_file import AsyncFileClient
@@ -112,7 +112,12 @@ class CocatApp:  # pragma: nocover
             return user
 
         @app.get("/room/{room_id}/users", response_model=RoomUsers)
-        async def get_room_users(room_id: str):
+        async def get_room_users(
+            room_id: str,
+            user: User = Depends(backend.current_active_user),
+        ):
+            if room_id not in user.rooms:
+                raise HTTPException(status_code=403)
             async with db.async_session_maker() as session:
                 statement = select(User)
                 users = (await session.execute(statement)).unique().all()
