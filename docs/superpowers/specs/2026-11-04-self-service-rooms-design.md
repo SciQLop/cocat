@@ -74,7 +74,12 @@ A room has exactly one owner. The owner can hand ownership to another member.
 - `invitation`: `token` (random, stored as a hash), `room_id`, `role`,
   `email` (set for an email invite, empty for a share link), `created_by`,
   `expires_at`, `revoked`, `max_uses`, `uses`.
-- The `user.rooms` JSON column goes away once data has been migrated.
+- The `user.rooms` JSON column stops being read once data has been migrated. It is dropped in a
+  later release with a direct `DROP COLUMN`, never Alembic's batch mode: on SQLite, batch mode
+  recreates the `user` table, and with foreign keys on, that deletes every membership.
+- Invitation tokens never appear in a URL path, so they stay out of access logs. They travel
+  in request bodies, and a share link carries the token in the URL fragment for the web UI.
+  A raw token is shown once, when it's created; an owner who loses it makes a new link.
 
 **Migration:** each existing room string becomes a `room` row with the same id and name.
 That keeps existing `.y` files in place. Every user who listed it becomes an editor.
@@ -91,12 +96,13 @@ because `create_all` can't change an existing table.
   `DELETE` on yourself means leave.
 - `POST /api/rooms/{id}/invitations` creates an email invite or a share link.
   `GET` lists them, `DELETE` revokes.
-- `GET /api/invitations/{token}` previews an invitation (room name, role, who invited).
-  `POST /api/invitations/{token}/accept` accepts it.
+- `POST /api/invitations/preview` previews an invitation (room name, role, who invited).
+  `POST /api/invitations/accept` accepts it. Both take the token in the body.
+- `POST /api/rooms/{id}/owner` hands ownership to another member.
 - The old `GET /rooms` and websocket `/room/{id}` stay, so the current plugin keeps working.
   The websocket checks the `membership` table instead of the JSON list.
 
-All permission checks live in one place: a single dependency that takes the user,
+All permission checks live in one place: a single service function that takes the user,
 the room and the minimum role. Every route calls it.
 
 ### Websocket enforcement
@@ -173,7 +179,8 @@ Each phase can ship on its own, and the current plugin keeps working after each 
 3. **Email and ORCID.** SMTP sender, verification, reset, invitation emails.
    ORCID login in the web UI.
 4. **SciQLop plugin.** Room names and roles, create, share, join with link, viewer mode.
-5. **Enforcement.** Viewer write-blocking on the websocket. Kick on removal or deletion.
+5. **Enforcement.** Viewer write-blocking on the websocket. (Kicking removed members and
+   closing deleted rooms already ships in phase 1.)
 6. **Later.** Presence ("who's here", using the CRDT awareness protocol). A read-only
    catalogue view in the browser. Per-user quotas on room count and room size.
    Shibboleth/eduGAIN through a broker, plus browser login for SciQLop
