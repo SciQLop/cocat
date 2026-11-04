@@ -23,7 +23,7 @@ from wiredb import AsyncChannel, Room, RoomManager
 from .connections import Connections
 from .db import DB, User, get_db
 from .db import Room as RoomModel
-from .ratelimit import RateLimiter, limit
+from .ratelimit import RateLimiter, limit, load_trusted_proxies
 from .rooms import RoomError, list_members, list_user_rooms
 from .routes import make_api_router, room_error_handler
 from .schemas import RoomUsers, UserCreate, UserRead, UserRooms, UserUpdate
@@ -103,7 +103,7 @@ class CocatApp:  # pragma: nocover
         )
 
         limiter = RateLimiter(10, 60.0)
-        check_limit = limit(limiter)
+        check_limit = limit(limiter, load_trusted_proxies())
 
         app.include_router(
             with_route_dependency(

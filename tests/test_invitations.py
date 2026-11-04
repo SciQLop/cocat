@@ -2,6 +2,7 @@ from datetime import timedelta
 
 import anyio
 import pytest
+from conftest import make_orm_user
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,35 +36,14 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-async def make_user(session: AsyncSession, email: str) -> User:
-    user = User(
-        email=email,
-        hashed_password="x",
-        is_active=True,
-        is_superuser=False,
-        is_verified=True,
-    )
-    session.add(user)
-    await session.commit()
-    return user
-
-
-@pytest.fixture()
-async def session(tmp_path):
-    db = get_db(str(tmp_path / "u.db"))
-    await db.create_db_and_tables()
-    async with db.async_session_maker() as session:
-        yield session
-
-
 @pytest.fixture()
 async def owner(session: AsyncSession) -> User:
-    return await make_user(session, "owner@x.org")
+    return await make_orm_user(session, "owner@x.org")
 
 
 @pytest.fixture()
 async def member(session: AsyncSession) -> User:
-    return await make_user(session, "member@x.org")
+    return await make_orm_user(session, "member@x.org")
 
 
 def test_hash_token():
@@ -89,11 +69,12 @@ async def test_link_invitation_accepted_by_anyone_until_max_uses(
         expires_at=invitation.expires_at,
     )
 
-    accepted_room = await accept_invitation(session, token, member)
+    accepted_room, accepted_role = await accept_invitation(session, token, member)
     assert accepted_room.id == room.id
+    assert accepted_role is Role.editor
     assert await get_role(session, room.id, member.id) is Role.editor
 
-    other = await make_user(session, "other@x.org")
+    other = await make_orm_user(session, "other@x.org")
     await accept_invitation(session, token, other)
 
 
@@ -102,7 +83,7 @@ async def test_used_up_invitation_refused_on_accept(session, owner, member):
     _, token = await create_invitation(session, room.id, owner, Role.editor, max_uses=1)
     await accept_invitation(session, token, member)
 
-    other = await make_user(session, "other@x.org")
+    other = await make_orm_user(session, "other@x.org")
     with pytest.raises(NotFound):
         await accept_invitation(session, token, other)
     with pytest.raises(NotFound):
@@ -122,7 +103,7 @@ async def test_email_invitation_only_for_that_email(session, owner, member):
     await session.refresh(invitation)
     assert invitation.uses == 0
 
-    invitee = await make_user(session, "Invitee@X.org")
+    invitee = await make_orm_user(session, "Invitee@X.org")
     await accept_invitation(session, token, invitee)
     assert await get_role(session, room.id, invitee.id) is Role.editor
 
@@ -172,8 +153,9 @@ async def test_accept_does_not_downgrade_existing_owner(session, owner):
     room = await create_room(session, owner, "Lab")
     _, token = await create_invitation(session, room.id, owner, Role.editor)
 
-    await accept_invitation(session, token, owner)
+    _, role = await accept_invitation(session, token, owner)
 
+    assert role is Role.owner
     assert await get_role(session, room.id, owner.id) is Role.owner
 
 
@@ -232,9 +214,9 @@ async def test_concurrent_accept_single_use(tmp_path):
     db = get_db(str(tmp_path / "u.db"))
     await db.create_db_and_tables()
     async with db.async_session_maker() as setup:
-        owner = await make_user(setup, "owner@x.org")
-        alice = await make_user(setup, "alice@x.org")
-        bob = await make_user(setup, "bob@x.org")
+        owner = await make_orm_user(setup, "owner@x.org")
+        alice = await make_orm_user(setup, "alice@x.org")
+        bob = await make_orm_user(setup, "bob@x.org")
         room = await create_room(setup, owner, "Lab")
         invitation, token = await create_invitation(
             setup, room.id, owner, Role.editor, max_uses=1

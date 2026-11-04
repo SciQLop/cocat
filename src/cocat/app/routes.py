@@ -25,7 +25,6 @@ from .rooms import (
     list_user_rooms,
     remove_member,
     rename_room,
-    require_role,
     set_member_role,
     transfer_ownership,
 )
@@ -218,8 +217,7 @@ def make_api_router(
         user: User = current_user,
         session: AsyncSession = session_dependency,
     ) -> RoomOut:
-        room = await accept_invitation(session, body.token, user)
-        role = await require_role(session, room.id, user, Role.viewer)
+        room, role = await accept_invitation(session, body.token, user)
         return RoomOut(id=room.id, name=room.name, role=role)
 
     return router

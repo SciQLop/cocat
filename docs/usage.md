@@ -148,6 +148,24 @@ directory, with one file per room: the room ID is the last component of the webs
 path, so a client connecting to `ws://127.0.0.1:8000/room/lab` uses room `lab` and the
 file `update_dir/lab.y`.
 
+Three environment variables change how the server behaves:
+
+| Variable | Effect |
+|---|---|
+| `COCAT_PROXY_PREFIX` | path prefix the server is served under when a reverse proxy rewrites the URL (default: none) |
+| `COCAT_TRUSTED_PROXIES` | number of reverse proxies in front of the server (default `0`) |
+| `COCAT_SECRET` | JWT signing secret, overriding the one stored in the `<db-path>.secret` file |
+
+`COCAT_TRUSTED_PROXIES` tells the per-client rate limiter (10 login attempts per minute)
+which address to trust: with the default `0` it uses the socket peer, and behind a proxy
+every client shares one bucket. It must be a non-negative integer, otherwise the server
+refuses to start.
+
+The JWT signing secret is created in a file next to the database (`<db-path>.secret`) by
+whichever command runs first, so sessions survive restarts. Set `COCAT_SECRET` when the
+server cannot read or write that file, for instance because the database lives in a
+directory the server user cannot modify.
+
 ### Rooms and invitations
 
 Rooms have members with one of three roles: `owner`, `editor` and `viewer` (viewers are
@@ -165,7 +183,7 @@ cookie as the rest of the server:
 | `PATCH /api/rooms/{room_id}` | rename a room (owner) |
 | `DELETE /api/rooms/{room_id}` | delete a room (owner) |
 | `GET /api/rooms/{room_id}/members` | list the members (any member) |
-| `PATCH /api/rooms/{room_id}/members/{user_id}` | change a member role (owner) |
+| `PATCH /api/rooms/{room_id}/members/{user_id}` | change a member role (owner), `editor` only for now |
 | `DELETE /api/rooms/{room_id}/members/{user_id}` | remove a member, or leave (owner or self) |
 | `POST /api/rooms/{room_id}/owner` | transfer the ownership (owner) |
 | `POST /api/rooms/{room_id}/invitations` | create an invitation (owner) |

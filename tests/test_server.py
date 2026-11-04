@@ -204,5 +204,5 @@ def test_wait_for_server_raises_when_process_exited():
 def test_wait_for_server_raises_when_never_ready():
     process = SimpleNamespace(poll=lambda: None, returncode=None)
 
-    with pytest.raises(RuntimeError, match="did not start within 0 s"):
-        wait_for_server("http://127.0.0.1:1", process, timeout=0)
+    with pytest.raises(RuntimeError, match="did not start within -1 s"):
+        wait_for_server("http://127.0.0.1:1", process, timeout=-1)

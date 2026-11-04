@@ -8,7 +8,8 @@ ENV STORAGE_PATH=/storage \
     DB_PATH=/db \
     LOG_PATH=/log \
     PORT=$PORT \
-    COCAT_PROXY_PREFIX=""
+    COCAT_PROXY_PREFIX="" \
+    COCAT_TRUSTED_PROXIES=1
 
 RUN useradd cocat && mkdir -p $STORAGE_PATH $DB_PATH  $LOG_PATH/cocat \
     && chown -R cocat $STORAGE_PATH $DB_PATH  $LOG_PATH \

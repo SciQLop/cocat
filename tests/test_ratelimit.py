@@ -4,7 +4,13 @@ from fastapi import APIRouter, Request
 from fastapi.routing import APIRoute
 
 from cocat.app.app import with_route_dependency
-from cocat.app.ratelimit import RateLimiter, client_key, limit
+from cocat.app.ratelimit import (
+    TRUSTED_PROXIES_ENV,
+    RateLimiter,
+    client_key,
+    limit,
+    load_trusted_proxies,
+)
 
 
 class FakeClock:
@@ -45,9 +51,35 @@ def test_limiter_drops_expired_windows():
     clock.now = 20.0
     limiter.hit("b")
     limiter.hit("c")
-    limiter.hit("d")
 
-    assert set(limiter._windows) == {"b", "c", "d"}
+    assert set(limiter._windows) == {"b", "c"}
+
+
+def test_limiter_caps_fresh_keys():
+    clock = FakeClock()
+    limiter = RateLimiter(1, 60.0, clock, max_keys=2)
+
+    for key in "abcd":
+        limiter.hit(key)
+
+    assert len(limiter._windows) <= 2
+    assert set(limiter._windows) == {"c", "d"}
+
+
+def test_load_trusted_proxies(monkeypatch):
+    monkeypatch.delenv(TRUSTED_PROXIES_ENV, raising=False)
+    assert load_trusted_proxies() == 0
+
+    monkeypatch.setenv(TRUSTED_PROXIES_ENV, "2")
+    assert load_trusted_proxies() == 2
+
+    monkeypatch.setenv(TRUSTED_PROXIES_ENV, "")
+    assert load_trusted_proxies() == 0
+
+    for bad in ("on", "1,2", "-1"):
+        monkeypatch.setenv(TRUSTED_PROXIES_ENV, bad)
+        with pytest.raises(RuntimeError, match="non-negative integer"):
+            load_trusted_proxies()
 
 
 def test_with_route_dependency_adds_and_raises_on_unknown_path():
@@ -57,7 +89,7 @@ def test_with_route_dependency_adds_and_raises_on_unknown_path():
     def known() -> None:
         return None
 
-    dependency = limit(RateLimiter(1, 60.0))
+    dependency = limit(RateLimiter(1, 60.0), 0)
 
     assert with_route_dependency(router, "/known", dependency) is router
     assert known() is None
@@ -108,16 +140,11 @@ def make_request(headers: dict[str, str]) -> Request:
     )
 
 
-def test_client_key_trusts_only_proxy_hops(monkeypatch):
+def test_client_key_trusts_only_proxy_hops():
     forwarded = make_request({"x-forwarded-for": "spoofed, 9.9.9.9"})
 
-    monkeypatch.setenv("COCAT_TRUSTED_PROXIES", "1")
-    assert client_key(forwarded) == "9.9.9.9"
+    assert client_key(forwarded, 1) == "9.9.9.9"
+    assert client_key(make_request({"x-forwarded-for": "1.1.1.1"}), 2) == "1.2.3.4"
+    assert client_key(forwarded, 0) == "1.2.3.4"
 
-    monkeypatch.setenv("COCAT_TRUSTED_PROXIES", "2")
-    assert client_key(make_request({"x-forwarded-for": "1.1.1.1"})) == "1.2.3.4"
-
-    monkeypatch.setenv("COCAT_TRUSTED_PROXIES", "0")
-    assert client_key(forwarded) == "1.2.3.4"
-
-    assert client_key(Request({"type": "http", "headers": []})) == "unknown"
+    assert client_key(Request({"type": "http", "headers": []}), 0) == "unknown"

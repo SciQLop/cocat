@@ -9,7 +9,8 @@ from fastapi_users.authentication import (
     CookieTransport,
     JWTStrategy,
 )
-from fastapi_users.db import SQLAlchemyUserDatabase
+from fastapi_users.db import BaseUserDatabase, SQLAlchemyUserDatabase
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db import DB, User
 from .rooms import create_personal_room, get_role
@@ -19,8 +20,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     async def on_after_register(
         self, user: User, request: Request | None = None
     ) -> None:
-        session = cast(SQLAlchemyUserDatabase, self.user_db).session
-        await create_personal_room(session, user)
+        await create_personal_room(user_db_session(self.user_db), user)
         print(f"User {user.id} has registered.")
 
     async def on_after_forgot_password(
@@ -39,6 +39,10 @@ def make_user_manager(user_db: SQLAlchemyUserDatabase, secret: str) -> UserManag
     user_manager.reset_password_token_secret = secret
     user_manager.verification_token_secret = secret
     return user_manager
+
+
+def user_db_session(user_db: BaseUserDatabase[User, uuid.UUID]) -> AsyncSession:
+    return cast(SQLAlchemyUserDatabase, user_db).session
 
 
 @dataclass

@@ -104,7 +104,9 @@ async def _consume_invitation(
         raise NotFound("Invitation not found")
 
 
-async def accept_invitation(session: AsyncSession, token: str, user: User) -> Room:
+async def accept_invitation(
+    session: AsyncSession, token: str, user: User
+) -> tuple[Room, Role]:
     now = utcnow()
     invitation = await session.scalar(
         select(Invitation).where(
@@ -117,9 +119,9 @@ async def accept_invitation(session: AsyncSession, token: str, user: User) -> Ro
     if invitation.email is not None and invitation.email.lower() != user.email.lower():
         raise Forbidden("This invitation is for another email address")
     await _consume_invitation(session, invitation.id, now)
-    await _add_member(session, invitation.room_id, user.id, invitation.role)
+    role = await _add_member(session, invitation.room_id, user.id, invitation.role)
     await session.commit()
-    return await session.get_one(Room, invitation.room_id)
+    return await session.get_one(Room, invitation.room_id), role
 
 
 async def list_invitations(

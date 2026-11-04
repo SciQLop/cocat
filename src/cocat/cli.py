@@ -1,7 +1,6 @@
 import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, cast
 from uuid import uuid4
 
 from anycorn import Config
@@ -10,15 +9,13 @@ from anyio import Event, create_task_group, run, sleep_forever
 from anyioutils import create_task
 from cyclopts import App
 from fastapi_users.exceptions import UserAlreadyExists
-from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from .app import rooms
 from .app.app import CocatApp
 from .app.db import Role, Room, get_db
 from .app.schemas import UserCreate
 from .app.secret import load_secret
-from .app.users import get_backend
+from .app.users import get_backend, user_db_session
 
 app = App()
 
@@ -181,10 +178,6 @@ async def _serve(
             await task.wait()
 
 
-def _session(user_manager: Any) -> AsyncSession:
-    return cast(SQLAlchemyUserDatabase, user_manager.user_db).session
-
-
 async def _create_user(email: str, password: str, is_superuser: bool, db_path: str):
     try:
         async with get_user_manager(db_path, True) as user_manager:
@@ -205,7 +198,9 @@ async def _create_user(email: str, password: str, is_superuser: bool, db_path: s
 async def _get_user(email: str, db_path: str):
     async with get_user_manager(db_path) as user_manager:
         user = await user_manager.get_by_email(email)
-        user_rooms = await rooms.list_user_rooms(_session(user_manager), user.id)
+        user_rooms = await rooms.list_user_rooms(
+            user_db_session(user_manager.user_db), user.id
+        )
         return user, [room.id for room, _ in user_rooms]
 
 
@@ -217,9 +212,12 @@ async def _create_room(
         room_id = room_id or uuid4().hex
         try:
             room = await rooms.create_room(
-                _session(user_manager), owner, name or room_id, room_id
+                user_db_session(user_manager.user_db),
+                owner,
+                name or room_id,
+                room_id,
             )
-        except rooms.RoomError as error:
+        except (rooms.RoomError, ValueError) as error:
             print(error)
             raise SystemExit(1)
         print(room.id)
@@ -228,7 +226,7 @@ async def _create_room(
 async def _add_user_to_room(email: str, room_id: str, db_path: str):
     async with get_user_manager(db_path) as user_manager:
         user = await user_manager.get_by_email(email)
-        session = _session(user_manager)
+        session = user_db_session(user_manager.user_db)
         if await session.get(Room, room_id) is None:
             print(f"Room {room_id} does not exist")
             raise SystemExit(1)
@@ -238,8 +236,12 @@ async def _add_user_to_room(email: str, room_id: str, db_path: str):
 async def _remove_user_from_room(email: str, room_id: str, db_path: str):
     async with get_user_manager(db_path) as user_manager:
         user = await user_manager.get_by_email(email)
+        session = user_db_session(user_manager.user_db)
+        if await session.get(Room, room_id) is None:
+            print(f"Room {room_id} does not exist")
+            raise SystemExit(1)
         try:
-            await rooms.remove_member(_session(user_manager), room_id, user, user.id)
+            await rooms.remove_member(session, room_id, user, user.id)
         except rooms.RoomError as error:
             print(error)
             raise SystemExit(1)
@@ -249,7 +251,9 @@ async def _set_room_owner(email: str, room_id: str, db_path: str):
     async with get_user_manager(db_path) as user_manager:
         user = await user_manager.get_by_email(email)
         try:
-            await rooms.set_owner(_session(user_manager), room_id, user.id)
+            await rooms.set_owner(
+                user_db_session(user_manager.user_db), room_id, user.id
+            )
         except rooms.RoomError as error:
             print(error)
             raise SystemExit(1)
@@ -258,16 +262,19 @@ async def _set_room_owner(email: str, room_id: str, db_path: str):
 @asynccontextmanager
 async def get_user_manager(db_path: str, create_db_and_tables: bool = False):
     db = get_db(db_path)
-    if create_db_and_tables:
-        await db.create_db_and_tables()
-    backend = get_backend(db, load_secret(Path(f"{db_path}.secret")))
-    get_async_session_context = asynccontextmanager(db.get_async_session)
-    get_user_db_context = asynccontextmanager(db.get_user_db)
-    get_user_manager_context = asynccontextmanager(backend.get_user_manager)
+    try:
+        if create_db_and_tables:
+            await db.create_db_and_tables()
+        backend = get_backend(db, load_secret(Path(f"{db_path}.secret")))
+        get_async_session_context = asynccontextmanager(db.get_async_session)
+        get_user_db_context = asynccontextmanager(db.get_user_db)
+        get_user_manager_context = asynccontextmanager(backend.get_user_manager)
 
-    async with (
-        get_async_session_context() as session,
-        get_user_db_context(session) as user_db,
-        get_user_manager_context(user_db) as user_manager,
-    ):
-        yield user_manager
+        async with (
+            get_async_session_context() as session,
+            get_user_db_context(session) as user_db,
+            get_user_manager_context(user_db) as user_manager,
+        ):
+            yield user_manager
+    finally:
+        await db.engine.dispose()

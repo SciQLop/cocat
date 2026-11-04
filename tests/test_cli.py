@@ -1,18 +1,22 @@
 import re
 
+import anyio
 import keyring
 import pytest
 from fastapi_users.exceptions import UserAlreadyExists
 from httpx_ws import WebSocketUpgradeError
+from sqlalchemy import event
 from utils import get_credential, set_password
 
 import cocat
 from cocat import log_in, set_config
+from cocat.app.db import DB, get_db
 from cocat.cli import (
     add_user_to_room,
     create_room,
     create_user,
     get_user,
+    get_user_manager,
     remove_user_from_room,
     set_room_owner,
 )
@@ -53,6 +57,16 @@ def test_user(tmp_path, server, room_id, monkeypatch, capsys):
         add_user_to_room(email=email, room_id=missing_room_id, db_path=db_path)
     assert excinfo.value.code == 1
     assert "does not exist" in capsys.readouterr().out
+
+    with pytest.raises(SystemExit) as excinfo:
+        remove_user_from_room(email=email, room_id=missing_room_id, db_path=db_path)
+    assert excinfo.value.code == 1
+    assert f"Room {missing_room_id} does not exist" in capsys.readouterr().out
+
+    with pytest.raises(SystemExit) as excinfo:
+        create_room(owner=other_email, room_id="../x", db_path=db_path)
+    assert excinfo.value.code == 1
+    assert "Invalid room id" in capsys.readouterr().out
 
     with pytest.raises(SystemExit) as excinfo:
         remove_user_from_room(email=other_email, room_id=room_id0, db_path=db_path)
@@ -111,3 +125,23 @@ def test_user(tmp_path, server, room_id, monkeypatch, capsys):
         set_config(room_id=personal_room_id)
 
         log_in(email, password)
+
+
+def test_get_user_manager_disposes_its_engine(tmp_path, monkeypatch):
+    disposed: list[bool] = []
+
+    def make_db(db_path: str) -> DB:
+        db = get_db(db_path)
+        event.listen(
+            db.engine.sync_engine, "engine_disposed", lambda *_: disposed.append(True)
+        )
+        return db
+
+    monkeypatch.setattr(cocat.cli, "get_db", make_db)
+
+    async def use_user_manager() -> None:
+        async with get_user_manager(str(tmp_path / "test.db"), True):
+            assert disposed == []
+
+    anyio.run(use_user_manager)
+    assert disposed == [True]

@@ -7,11 +7,17 @@ def load_secret(path: Path) -> str:
     if env_secret := os.environ.get("COCAT_SECRET"):
         return env_secret
 
+    _ensure_secret(path)
+    return _read_secret(path)
+
+
+def _ensure_secret(path: Path) -> None:
     try:
         _create_secret(path)
     except FileExistsError:
         pass
-    return _read_secret(path)
+    except OSError as error:
+        raise _secret_error(path, error) from error
 
 
 def _create_secret(path: Path) -> None:
@@ -26,7 +32,18 @@ def _create_secret(path: Path) -> None:
 
 
 def _read_secret(path: Path) -> str:
-    secret = path.read_text().strip()
+    try:
+        secret = path.read_text().strip()
+    except OSError as error:
+        raise _secret_error(path, error) from error
     if not secret:
         raise RuntimeError(f"Secret file {path} is empty")
     return secret
+
+
+def _secret_error(path: Path, error: OSError) -> RuntimeError:
+    return RuntimeError(
+        f"Cannot access the secret file {path}: {error}. "
+        "Fix the file or directory permissions, or set COCAT_SECRET to supply the "
+        "secret another way."
+    )

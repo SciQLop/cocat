@@ -26,7 +26,9 @@ class Connections:
 
     async def close(self, room_id: str, user_id: UUID | None = None) -> None:
         users = self._rooms.get(room_id, {})
-        groups = users.values() if user_id is None else [users.get(user_id, set())]
+        groups = (
+            list(users.values()) if user_id is None else [users.get(user_id, set())]
+        )
         for sockets in groups:
             for websocket in list(sockets):
                 with suppress(OSError, RuntimeError):

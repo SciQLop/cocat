@@ -1,5 +1,7 @@
+import os
 import stat
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -51,6 +53,41 @@ def test_load_secret_empty_file_raises(tmp_path):
         load_secret(path)
 
     assert str(path) in str(excinfo.value)
+
+
+def test_load_secret_unreadable_file_suggests_remedies(tmp_path, monkeypatch):
+    path = tmp_path / "s"
+    path.write_text("abc")
+
+    def deny_read(self: Path, *args: Any, **kwargs: Any) -> str:
+        raise PermissionError(13, "Permission denied", str(self))
+
+    monkeypatch.setattr(Path, "read_text", deny_read)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        load_secret(path)
+
+    message = str(excinfo.value)
+    assert str(path) in message
+    assert "permissions" in message
+    assert "COCAT_SECRET" in message
+
+
+def test_load_secret_unwritable_directory_suggests_remedies(tmp_path, monkeypatch):
+    path = tmp_path / "s"
+
+    def deny_create(*args: Any, **kwargs: Any) -> int:
+        raise PermissionError(13, "Permission denied", str(path))
+
+    monkeypatch.setattr(os, "open", deny_create)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        load_secret(path)
+
+    message = str(excinfo.value)
+    assert str(path) in message
+    assert "permissions" in message
+    assert "COCAT_SECRET" in message
 
 
 def make_user_manager() -> UserManager:

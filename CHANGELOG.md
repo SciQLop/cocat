@@ -10,6 +10,13 @@
   `cocat set-room-owner`.
 - New users get a personal room. Older SciQLop plugins cannot find it until the
   SciQLop collaborative-catalogs plugin is updated.
+- Rate-limit login and forgot-password to 10 requests per minute and per client. Behind
+  a reverse proxy, set `COCAT_TRUSTED_PROXIES` to the number of proxies so that clients
+  are told apart.
+- Keep the JWT signing secret across restarts: it is stored in `<db-path>.secret`, or
+  supplied with `COCAT_SECRET`.
+- Breaking: `Session.connect()` no longer takes a `room_id`, call
+  `set_config(room_id=...)` before `log_in`.
 
 ## 0.11.0
 

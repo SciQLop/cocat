@@ -8,10 +8,42 @@ from uuid import uuid4
 import anyio
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.websockets import WebSocketDisconnect
 from utils import create_room, create_user, wait_for_server
 
 from cocat.app.app import CocatApp
+from cocat.app.db import User, get_db
 from cocat.cli import _create_user
+
+
+async def make_orm_user(session: AsyncSession, email: str) -> User:
+    user = User(
+        email=email,
+        hashed_password="x",
+        is_active=True,
+        is_superuser=False,
+        is_verified=True,
+    )
+    session.add(user)
+    await session.commit()
+    return user
+
+
+def assert_websocket_refused(
+    client: TestClient, url: str, headers: dict[str, str] | None = None
+) -> None:
+    with pytest.raises(WebSocketDisconnect) as refused:
+        client.websocket_connect(url, headers=headers).__enter__()
+    assert refused.value.code == 1008
+
+
+@pytest.fixture()
+async def session(tmp_path):
+    db = get_db(str(tmp_path / "u.db"))
+    await db.create_db_and_tables()
+    async with db.async_session_maker() as session:
+        yield session
 
 
 @dataclass

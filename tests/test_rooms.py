@@ -1,8 +1,9 @@
 import pytest
+from conftest import make_orm_user
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cocat.app.db import Membership, Role, Room, User, get_db
+from cocat.app.db import Membership, Role, Room, User
 from cocat.app.rooms import (
     Conflict,
     Forbidden,
@@ -32,40 +33,19 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-async def make_user(session: AsyncSession, email: str) -> User:
-    user = User(
-        email=email,
-        hashed_password="x",
-        is_active=True,
-        is_superuser=False,
-        is_verified=True,
-    )
-    session.add(user)
-    await session.commit()
-    return user
-
-
-@pytest.fixture()
-async def session(tmp_path):
-    db = get_db(str(tmp_path / "u.db"))
-    await db.create_db_and_tables()
-    async with db.async_session_maker() as session:
-        yield session
-
-
 @pytest.fixture()
 async def owner(session: AsyncSession) -> User:
-    return await make_user(session, "owner@x.org")
+    return await make_orm_user(session, "owner@x.org")
 
 
 @pytest.fixture()
 async def editor(session: AsyncSession) -> User:
-    return await make_user(session, "editor@x.org")
+    return await make_orm_user(session, "editor@x.org")
 
 
 @pytest.fixture()
 async def stranger(session: AsyncSession) -> User:
-    return await make_user(session, "stranger@x.org")
+    return await make_orm_user(session, "stranger@x.org")
 
 
 def test_validate_room_id():

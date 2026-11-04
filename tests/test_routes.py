@@ -1,7 +1,13 @@
 from pathlib import Path
 
 import pytest
-from conftest import AppClient, login, make_user, ws_headers
+from conftest import (
+    AppClient,
+    assert_websocket_refused,
+    login,
+    make_user,
+    ws_headers,
+)
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
@@ -231,11 +237,11 @@ def test_websocket_member_accepted_nonmember_refused(app_client):
         pass
 
     login(app_client.client, "stranger@x.org")
-    with pytest.raises(WebSocketDisconnect) as excinfo:
-        app_client.client.websocket_connect(
-            f"/room/{room['id']}", headers=ws_headers(app_client.client)
-        ).__enter__()
-    assert excinfo.value.code == 1008
+    assert_websocket_refused(
+        app_client.client,
+        f"/room/{room['id']}",
+        ws_headers(app_client.client),
+    )
 
 
 def test_websocket_does_not_hold_a_db_connection(tmp_path):
@@ -285,11 +291,11 @@ def test_removed_member_is_disconnected_and_cannot_reconnect(app_client):
         assert excinfo.value.code == 1008
 
     login(app_client.client, "member@x.org")
-    with pytest.raises(WebSocketDisconnect) as excinfo:
-        app_client.client.websocket_connect(
-            f"/room/{room['id']}", headers=ws_headers(app_client.client)
-        ).__enter__()
-    assert excinfo.value.code == 1008
+    assert_websocket_refused(
+        app_client.client,
+        f"/room/{room['id']}",
+        ws_headers(app_client.client),
+    )
 
 
 def test_delete_room_disconnects_and_removes_file(app_client):
@@ -312,3 +318,34 @@ def test_delete_room_disconnects_and_removes_file(app_client):
         assert excinfo.value.code == 1008
 
     assert not file_path.exists()
+
+
+def test_delete_room_disconnects_every_member(app_client):
+    make_user(app_client.db_path, "owner@x.org")
+    make_user(app_client.db_path, "member@x.org")
+    login(app_client.client, "owner@x.org")
+    room = create_room(app_client)
+    token = invite(app_client, room["id"])
+    join_room(app_client, "member@x.org", token)
+    member_headers = ws_headers(app_client.client)
+
+    login(app_client.client, "owner@x.org")
+    url = f"/room/{room['id']}"
+    with (
+        app_client.client.websocket_connect(
+            url, headers=ws_headers(app_client.client)
+        ) as owner_socket,
+        app_client.client.websocket_connect(
+            url, headers=member_headers
+        ) as member_socket,
+    ):
+        assert owner_socket.receive_bytes()
+        assert member_socket.receive_bytes()
+
+        deleted = app_client.client.delete(f"/api/rooms/{room['id']}")
+        assert deleted.status_code == 204
+
+        for socket in (owner_socket, member_socket):
+            with pytest.raises(WebSocketDisconnect) as excinfo:
+                socket.receive_bytes()
+            assert excinfo.value.code == 1008
