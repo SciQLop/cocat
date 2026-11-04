@@ -1,3 +1,5 @@
+import enum
+import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -11,11 +13,26 @@ from fastapi_users.db import SQLAlchemyBaseUserTableUUID, SQLAlchemyUserDatabase
 from fastapi_users_db_sqlalchemy.access_token import (
     SQLAlchemyBaseAccessTokenTableUUID,
 )
-from sqlalchemy import JSON, Column, Connection, event, inspect
+from fastapi_users_db_sqlalchemy.generics import GUID
+from sqlalchemy import (
+    JSON,
+    Column,
+    Connection,
+    Enum,
+    ForeignKey,
+    String,
+    event,
+    inspect,
+    text,
+)
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 _MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Base(DeclarativeBase):
@@ -30,8 +47,57 @@ class AccessToken(SQLAlchemyBaseAccessTokenTableUUID, Base):
     pass
 
 
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+class Role(str, enum.Enum):
+    owner = "owner"
+    editor = "editor"
+    viewer = "viewer"
+
+
+ROLE_RANK: dict[Role, int] = {Role.viewer: 0, Role.editor: 1, Role.owner: 2}
+
+
+class Room(Base):
+    __tablename__ = "room"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        GUID, ForeignKey("user.id", ondelete="SET NULL")
+    )
+
+
+class Membership(Base):
+    __tablename__ = "membership"
+
+    room_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("room.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        GUID, ForeignKey("user.id", ondelete="CASCADE"), primary_key=True
+    )
+    role: Mapped[Role] = mapped_column(Enum(Role))
+    joined_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class Invitation(Base):
+    __tablename__ = "invitation"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    room_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("room.id", ondelete="CASCADE")
+    )
+    role: Mapped[Role] = mapped_column(Enum(Role))
+    email: Mapped[str | None] = mapped_column(String(320))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        GUID, ForeignKey("user.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    expires_at: Mapped[datetime]
+    revoked: Mapped[bool] = mapped_column(default=False)
+    max_uses: Mapped[int | None]
+    uses: Mapped[int] = mapped_column(default=0)
 
 
 def migration_config(connection: Connection | None = None) -> Config:
@@ -44,10 +110,16 @@ def migration_config(connection: Connection | None = None) -> Config:
 
 def run_migrations(sync_conn: Connection) -> None:
     config = migration_config(sync_conn)
-    inspector = inspect(sync_conn)
-    if inspector.has_table("user") and not inspector.has_table("alembic_version"):
+    if inspect(sync_conn).has_table("user") and _version(sync_conn) is None:
         command.stamp(config, "0001")
     command.upgrade(config, "head")
+
+
+def _version(sync_conn: Connection) -> str | None:
+    if not inspect(sync_conn).has_table("alembic_version"):
+        return None
+    row = sync_conn.execute(text("SELECT version_num FROM alembic_version")).first()
+    return row[0] if row else None
 
 
 @dataclass
