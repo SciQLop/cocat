@@ -16,21 +16,16 @@ class UserRooms(BaseModel):
     rooms: list[str] = []
 
 
-class UserRead(schemas.BaseUser[uuid.UUID], UserRooms):
+class UserRead(schemas.BaseUser[uuid.UUID]):
     pass
 
 
-class UserCreate(schemas.BaseUserCreate, UserRooms):
+class UserCreate(schemas.BaseUserCreate):
     pass
 
 
-class UserUpdate(schemas.BaseUserUpdate, UserRooms):
-    def create_update_dict(self):
-        # fastapi-users uses this "safe" dict for self-service updates (PATCH /users/me);
-        # room membership is the access control, so only admins may change it.
-        update_dict = super().create_update_dict()
-        update_dict.pop("rooms", None)
-        return update_dict
+class UserUpdate(schemas.BaseUserUpdate):
+    pass
 
 
 class RoomOut(BaseModel):

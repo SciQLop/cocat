@@ -10,24 +10,32 @@ from anyio.abc import TaskStatus
 from fastapi import (
     Depends,
     FastAPI,
-    HTTPException,
     Request,
     WebSocket,
     WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute, APIRouter
-from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from wire_file import AsyncFileClient
 from wiredb import AsyncChannel, Room, RoomManager
 
 from .db import User, get_db
 from .ratelimit import RateLimiter, limit
-from .rooms import RoomError
+from .rooms import RoomError, list_members, list_user_rooms
 from .routes import make_api_router, room_error_handler
 from .schemas import RoomUsers, UserCreate, UserRead, UserRooms, UserUpdate
 from .secret import load_secret
 from .users import get_backend
+
+
+def room_file(update_dir: str, room_id: str) -> Path:
+    if room_id in ("", ".", "..") or any(char in room_id for char in ("/", "\\", "\0")):
+        raise ValueError(f"Invalid room id: {room_id!r}")
+    path = (Path(update_dir) / f"{room_id}.y").resolve()
+    if not path.is_relative_to(Path(update_dir).resolve()):
+        raise ValueError(f"Invalid room id: {room_id!r}")
+    return path
 
 
 def with_route_dependency(
@@ -52,7 +60,7 @@ class StoredRoom(Room):  # pragma: nocover
     async def connect_to_file(self, *, task_status: TaskStatus[None]) -> None:
         async with AsyncFileClient(
             doc=self.doc,
-            path=f"{Path(self._directory) / self.id.lstrip('/')}.y",
+            path=room_file(self._directory, self.id),
         ):
             task_status.started()
             await sleep_forever()
@@ -61,6 +69,7 @@ class StoredRoom(Room):  # pragma: nocover
 class CocatApp:  # pragma: nocover
     def __init__(self, update_dir: str, db_path: str = "./test.db") -> None:
         db = get_db(db_path)
+        self.db = db
         backend = get_backend(db, load_secret(Path(f"{db_path}.secret")))
 
         @asynccontextmanager
@@ -144,22 +153,22 @@ class CocatApp:  # pragma: nocover
         @app.get("/rooms", response_model=UserRooms)
         async def get_rooms(
             user: User = Depends(backend.current_active_user),
+            session: AsyncSession = Depends(db.get_async_session),
         ):
-            return user
+            return {
+                "rooms": [
+                    room.id for room, _ in await list_user_rooms(session, user.id)
+                ]
+            }
 
         @app.get("/room/{room_id}/users", response_model=RoomUsers)
         async def get_room_users(
             room_id: str,
             user: User = Depends(backend.current_active_user),
+            session: AsyncSession = Depends(db.get_async_session),
         ):
-            if room_id not in user.rooms:
-                raise HTTPException(status_code=403)
-            async with db.async_session_maker() as session:
-                statement = select(User)
-                users = (await session.execute(statement)).unique().all()
-            return {
-                "users": [usr.User.email for usr in users if room_id in usr.User.rooms]
-            }
+            members = await list_members(session, room_id, user)
+            return {"users": [member.email for member, _ in members]}
 
 
 class YWebSocket(AsyncChannel):  # pragma: nocover

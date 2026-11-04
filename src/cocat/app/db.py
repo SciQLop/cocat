@@ -25,7 +25,12 @@ from sqlalchemy import (
     inspect,
     text,
 )
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 _MIGRATIONS_DIR = Path(__file__).parent / "migrations"
@@ -124,6 +129,7 @@ def _version(sync_conn: Connection) -> str | None:
 
 @dataclass
 class DB:
+    engine: AsyncEngine
     async_session_maker: async_sessionmaker[AsyncSession]
     create_db_and_tables: Callable[[], Awaitable]
     get_async_session: Callable[[], AsyncGenerator[AsyncSession, None]]
@@ -156,6 +162,7 @@ def get_db(path: str) -> DB:
         yield SQLAlchemyUserDatabase(session, User)
 
     return DB(
+        engine=engine,
         async_session_maker=async_session_maker,
         create_db_and_tables=create_db_and_tables,
         get_async_session=get_async_session,

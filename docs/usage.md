@@ -111,6 +111,9 @@ event1 = get_event("497393db-7dd6-4d7b-9ff1-8a8155bfed54")
 log_out()
 ```
 
+`log_in` connects to the room given by `set_config(room_id=...)`; without one, it
+connects to your personal room.
+
 ### CLI
 
 A command-line interface allows to launch a server and manage users.
@@ -120,17 +123,19 @@ Because the server can only be accessed by authenticated users, one has to creat
 cocat create-user --email "paul@example.com" --password "my_password" --db-path "users.db"
 ```
 
-By default users have no permission to connect to any room. To allow a user in a room:
+Every user gets a personal room named "Personal", which they own. Administrators can
+create rooms and manage their members:
 
 ```bash
-cocat add-user-to-room --email "paul@example.com" --room-id "my_room" --db-path "users.db"
+cocat create-room --owner "paul@example.com" --room-id "lab" --name "Lab" --db-path "users.db"
+cocat add-user-to-room --email "mary@example.com" --room-id "lab" --db-path "users.db"
+cocat remove-user-from-room --email "mary@example.com" --room-id "lab" --db-path "users.db"
+cocat set-room-owner --email "mary@example.com" --room-id "lab" --db-path "users.db"
 ```
 
-If you wish to remove this user from a room at a later time:
-
-```bash
-cocat remove-user-from-room --email "paul@example.com" --room-id "my_room" --db-path "users.db"
-```
+`add-user-to-room` and `remove-user-from-room` work on existing rooms; removing an owner
+is refused, transfer the ownership first with `set-room-owner`. A room ID given to
+`create-room` may only contain letters, digits, `_` and `-`.
 
 Then the server can be launched:
 
@@ -138,8 +143,47 @@ Then the server can be launched:
 cocat serve --host "127.0.0.1" --port 8000 --update-dir "update_dir" --db-path "users.db"
 ```
 
-The server will listen to `http://127.0.0.1:8000` and the updates will be stored
-in the `update_dir` directory, with one file per room. Rooms are identified with
-the path a client connects to. For instance, if a client connects to
-`http://127.0.0.1:8000/my_room`, then the room ID is `my_room` and the corresponding
-file path is `update_dir/my_room.y`.
+The server listens on `http://127.0.0.1:8000`. Updates are stored in the `update_dir`
+directory, with one file per room: the room ID is the last component of the websocket
+path, so a client connecting to `ws://127.0.0.1:8000/room/lab` uses room `lab` and the
+file `update_dir/lab.y`.
+
+### Rooms and invitations
+
+Rooms have members with one of three roles: `owner`, `editor` and `viewer` (viewers are
+not enforced yet, so the API only hands out `editor`). Every user owns their personal
+room.
+
+A logged-in user manages their rooms through `/api`, with the same `fastapiusersauth`
+cookie as the rest of the server:
+
+| Method and path | What it does |
+|---|---|
+| `GET /api/me` | the logged-in user |
+| `GET /api/rooms` | the rooms you belong to, with your role |
+| `POST /api/rooms` | create a room (you own it) |
+| `PATCH /api/rooms/{room_id}` | rename a room (owner) |
+| `DELETE /api/rooms/{room_id}` | delete a room (owner) |
+| `GET /api/rooms/{room_id}/members` | list the members (any member) |
+| `PATCH /api/rooms/{room_id}/members/{user_id}` | change a member role (owner) |
+| `DELETE /api/rooms/{room_id}/members/{user_id}` | remove a member, or leave (owner or self) |
+| `POST /api/rooms/{room_id}/owner` | transfer the ownership (owner) |
+| `POST /api/rooms/{room_id}/invitations` | create an invitation (owner) |
+| `GET /api/rooms/{room_id}/invitations` | list the valid invitations (owner) |
+| `DELETE /api/rooms/{room_id}/invitations/{invitation_id}` | revoke an invitation (owner) |
+| `POST /api/invitations/preview` | preview an invitation (no login needed) |
+| `POST /api/invitations/accept` | accept an invitation (login needed) |
+
+An invitation carries a role and an expiry date (14 days by default) and, if it targets
+an e-mail address, a single use. Its token is only ever sent in the request body, never
+in a URL:
+
+```py
+import httpx
+
+token = "..."
+httpx.post("http://localhost:8000/api/invitations/preview", json={"token": token})
+```
+
+Accepting an invitation adds you to the room with the role it carries; existing members
+keep their highest role.

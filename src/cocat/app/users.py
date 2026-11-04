@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import Cookie, Depends, Path, Request, WebSocket, status
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin, models
@@ -12,12 +12,15 @@ from fastapi_users.authentication import (
 from fastapi_users.db import SQLAlchemyUserDatabase
 
 from .db import DB, User
+from .rooms import create_personal_room, get_role
 
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     async def on_after_register(
         self, user: User, request: Request | None = None
     ) -> None:
+        session = cast(SQLAlchemyUserDatabase, self.user_db).session
+        await create_personal_room(session, user)
         print(f"User {user.id} has registered.")
 
     async def on_after_forgot_password(
@@ -29,6 +32,13 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
         self, user: User, token: str, request: Request | None = None
     ) -> None:
         print(f"User {user.id} requested a verification.")
+
+
+def make_user_manager(user_db: SQLAlchemyUserDatabase, secret: str) -> UserManager:
+    user_manager = UserManager(user_db)
+    user_manager.reset_password_token_secret = secret
+    user_manager.verification_token_secret = secret
+    return user_manager
 
 
 @dataclass
@@ -45,24 +55,26 @@ def get_backend(db: DB, secret: str) -> Backend:
     async def get_user_manager(
         user_db: SQLAlchemyUserDatabase = Depends(db.get_user_db),
     ):
-        user_manager = UserManager(user_db)
-        user_manager.reset_password_token_secret = secret
-        user_manager.verification_token_secret = secret
-        yield user_manager
+        yield make_user_manager(user_db, secret)
 
     async def websocket_auth(
         websocket: WebSocket,
         room_id: str = Path(...),
         fastapiusersauth: Annotated[str | None, Cookie()] = None,
-        user_manager: BaseUserManager[models.UP, models.ID] = Depends(get_user_manager),
-    ) -> WebSocket | None:  # pragma: nocover
-        accept_websocket = False
+    ) -> WebSocket | None:
         if fastapiusersauth is not None:
-            user = await get_jwt_strategy().read_token(fastapiusersauth, user_manager)  # type: ignore[func-returns-value,arg-type]
-            if user and room_id in user.rooms:
-                accept_websocket = True
-        if accept_websocket:
-            return websocket
+            async with db.async_session_maker() as session:
+                user_manager = make_user_manager(
+                    SQLAlchemyUserDatabase(session, User), secret
+                )
+                user = await get_jwt_strategy().read_token(  # type: ignore[func-returns-value]
+                    fastapiusersauth, cast(Any, user_manager)
+                )
+                if (
+                    user is not None
+                    and await get_role(session, room_id, user.id) is not None
+                ):
+                    return websocket
 
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return None

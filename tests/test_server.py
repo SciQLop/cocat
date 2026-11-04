@@ -9,7 +9,6 @@ from wire_file import AsyncFileClient
 from wire_websocket import AsyncWebSocketClient, AsyncWebSocketServer
 
 from cocat import DB
-from cocat.app.schemas import UserUpdate
 
 pytestmark = pytest.mark.anyio
 
@@ -143,15 +142,18 @@ async def test_api(server, user, room_id, db_path):
     assert response.json() == {"detail": "Unauthorized"}
 
     response = httpx.get(f"http://{host}:{port}/rooms", cookies=cookies)
-    user_room_id = username.split("@")[0]
-    assert set(response.json()["rooms"]) == {room_id, user_room_id}
+    rooms = set(response.json()["rooms"])
+    assert room_id in rooms
+    assert len(rooms) == 2
+    personal_room_id = (rooms - {room_id}).pop()
+    assert len(personal_room_id) == 32
 
     email0 = "user0@example.com"
     create_user(email=email0, password="pwd", db_path=db_path)
     add_user_to_room(email=email0, room_id=room_id, db_path=db_path)
 
     response = httpx.get(f"http://{host}:{port}/room/{room_id}/users", cookies=cookies)
-    assert response.json() == {"users": [username, email0]}
+    assert set(response.json()["users"]) == {username, email0}
 
 
 def login(host, port, username, password) -> httpx.Cookies:
@@ -186,16 +188,10 @@ def test_room_users_requires_room_member(server, user, room_id, db_path):
     outsider, password = "outsider@example.com", "pwd"
     create_user(email=outsider, password=password, db_path=db_path)
     outsider_cookies = login(host, port, outsider, password)
-    assert httpx.get(url, cookies=outsider_cookies).status_code == 403
+    assert httpx.get(url, cookies=outsider_cookies).status_code == 404
 
     member_cookies = login(host, port, *user)
     assert httpx.get(url, cookies=member_cookies).json() == {"users": [user[0]]}
-
-
-def test_self_update_excludes_rooms():
-    user_update = UserUpdate(email="a@b.c", rooms=["stolen_room"])
-    assert "rooms" not in user_update.create_update_dict()
-    assert user_update.create_update_dict_superuser()["rooms"] == ["stolen_room"]
 
 
 def test_wait_for_server_raises_when_process_exited():

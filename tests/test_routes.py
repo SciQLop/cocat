@@ -1,4 +1,12 @@
-from conftest import AppClient, login, make_user
+import sys
+from pathlib import Path
+
+import pytest
+from conftest import AppClient, login, make_user, ws_headers
+from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
+
+from cocat.app.app import CocatApp, room_file
 
 
 def create_room(app: AppClient, name: str = "Lab") -> dict:
@@ -36,7 +44,11 @@ def test_create_list_rename_delete_room(app_client):
     room = create_room(app_client)
     assert room["name"] == "Lab"
     assert room["role"] == "owner"
-    assert app_client.client.get("/api/rooms").json() == [room]
+    listed = {
+        listed["id"]: listed for listed in app_client.client.get("/api/rooms").json()
+    }
+    assert len(listed) == 2
+    assert listed[room["id"]] == room
 
     renamed = app_client.client.patch(
         f"/api/rooms/{room['id']}", json={"name": "Renamed"}
@@ -45,7 +57,9 @@ def test_create_list_rename_delete_room(app_client):
     assert renamed.json() == {**room, "name": "Renamed"}
 
     assert app_client.client.delete(f"/api/rooms/{room['id']}").status_code == 204
-    assert app_client.client.get("/api/rooms").json() == []
+    assert [
+        listed["name"] for listed in app_client.client.get("/api/rooms").json()
+    ] == ["Personal"]
 
 
 def test_invite_link_flow(app_client):
@@ -66,9 +80,11 @@ def test_invite_link_flow(app_client):
 
     join_room(app_client, "guest@x.org", token)
 
-    assert app_client.client.get("/api/rooms").json() == [
-        {"id": room["id"], "name": "Lab", "role": "editor"}
-    ]
+    rooms = {
+        listed["id"]: listed for listed in app_client.client.get("/api/rooms").json()
+    }
+    assert len(rooms) == 2
+    assert rooms[room["id"]] == {"id": room["id"], "name": "Lab", "role": "editor"}
 
 
 def test_member_management(app_client):
@@ -165,3 +181,95 @@ def test_invitation_token_never_in_a_path(app_client):
     assert paths
     assert all("{token}" not in path for path in paths)
     assert all("token" not in path for path in paths if path.startswith("/api"))
+
+
+def test_new_user_gets_personal_room_not_email_prefix(app_client):
+    make_user(app_client.db_path, "john@a.org")
+    make_user(app_client.db_path, "john@b.org")
+
+    login(app_client.client, "john@a.org")
+    rooms_a = app_client.client.get("/api/rooms").json()
+    login(app_client.client, "john@b.org")
+    rooms_b = app_client.client.get("/api/rooms").json()
+
+    assert len(rooms_a) == 1
+    assert len(rooms_b) == 1
+    assert rooms_a[0]["name"] == "Personal"
+    assert rooms_a[0]["id"] != "john"
+    assert rooms_a[0]["id"] != rooms_b[0]["id"]
+    members_url = "/api/rooms/{}/members"
+    assert (
+        app_client.client.get(members_url.format(rooms_a[0]["id"])).status_code == 404
+    )
+
+    login(app_client.client, "john@a.org")
+    assert (
+        app_client.client.get(members_url.format(rooms_b[0]["id"])).status_code == 404
+    )
+
+
+def test_legacy_rooms_endpoint_shape(app_client):
+    make_user(app_client.db_path, "john@a.org")
+    login(app_client.client, "john@a.org")
+    personal = app_client.client.get("/api/rooms").json()[0]
+
+    response = app_client.client.get("/rooms")
+
+    assert response.status_code == 200
+    assert response.json() == {"rooms": [personal["id"]]}
+
+
+def test_websocket_member_accepted_nonmember_refused(app_client):
+    make_user(app_client.db_path, "owner@x.org")
+    make_user(app_client.db_path, "stranger@x.org")
+    login(app_client.client, "owner@x.org")
+    room = create_room(app_client)
+
+    with app_client.client.websocket_connect(
+        f"/room/{room['id']}", headers=ws_headers(app_client.client)
+    ):
+        pass
+
+    login(app_client.client, "stranger@x.org")
+    with pytest.raises(WebSocketDisconnect) as excinfo:
+        app_client.client.websocket_connect(
+            f"/room/{room['id']}", headers=ws_headers(app_client.client)
+        ).__enter__()
+    assert excinfo.value.code == 1008
+
+
+def test_room_file_rejects_traversal_but_keeps_legacy_ids(app_client):
+    for room_id in ("", ".", "..", "../x", "a/b", "a\\b", "a\0b"):
+        with pytest.raises(ValueError):
+            room_file(app_client.update_dir, room_id)
+
+    assert room_file(app_client.update_dir, "o'brien") == (
+        Path(app_client.update_dir, "o'brien.y").resolve()
+    )
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks only")
+def test_room_file_rejects_symlink_escape(app_client, tmp_path):
+    outside = tmp_path / "outside.y"
+    outside.touch()
+    (Path(app_client.update_dir) / "linked.y").symlink_to(outside)
+
+    with pytest.raises(ValueError):
+        room_file(app_client.update_dir, "linked")
+
+
+def test_websocket_does_not_hold_a_db_connection(tmp_path):
+    update_dir = str(tmp_path / "update_dir")
+    Path(update_dir).mkdir()
+    db_path = str(tmp_path / "test.db")
+    cocat_app = CocatApp(update_dir, db_path)
+    with TestClient(cocat_app.app, base_url="https://testserver") as client:
+        app_client = AppClient(client=client, db_path=db_path, update_dir=update_dir)
+        make_user(db_path, "member@x.org")
+        login(client, "member@x.org")
+        room = create_room(app_client)
+
+        with client.websocket_connect(
+            f"/room/{room['id']}", headers=ws_headers(client)
+        ):
+            assert cocat_app.db.engine.pool.checkedout() == 0

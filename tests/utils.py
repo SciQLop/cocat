@@ -57,6 +57,20 @@ def add_user_to_room(email: str, room_id: str, db_path: str) -> None:
     subprocess.check_call(command)
 
 
+def create_room(owner: str, room_id: str, db_path: str) -> None:
+    command = [
+        "cocat",
+        "create-room",
+        "--owner",
+        owner,
+        "--room-id",
+        room_id,
+        "--db_path",
+        db_path,
+    ]
+    subprocess.check_call(command)
+
+
 def get_credential(service_name: str, username: str | None) -> Credentials | None:
     return WALLET.get(service_name)
 

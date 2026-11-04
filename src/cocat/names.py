@@ -1,0 +1,1 @@
+PERSONAL_ROOM_NAME = "Personal"

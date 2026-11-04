@@ -15,6 +15,7 @@ from wire_websocket import WebSocketClient
 from .catalogue import Catalogue
 from .db import DB
 from .event import Event
+from .names import PERSONAL_ROOM_NAME
 from .votable import export_votable_file, import_votable_file
 
 
@@ -62,10 +63,7 @@ class Session:
         if not self.connected:
             raise RuntimeError("Not logged in")
 
-    def connect(self, room_id: str | None = None) -> None:
-        if self.room_id is None:
-            self.room_id = room_id
-
+    def connect(self) -> None:
         with ExitStack() as exit_stack:
             self.client = exit_stack.enter_context(
                 WebSocketClient(
@@ -152,8 +150,23 @@ def log_in(
         raise RuntimeError("Wrong username or password")
     SESSION.cookies.set("fastapiusersauth", cookie)
     if connect:
-        room_id = username.split("@")[0]
-        SESSION.connect(room_id)
+        if SESSION.room_id is None:
+            SESSION.room_id = _default_room(base_url)
+        SESSION.connect()
+
+
+def _default_room(base_url: str) -> str:
+    # base_url always ends with "/"
+    response = httpx.get(f"{base_url}api/rooms", cookies=SESSION.cookies)
+    if response.status_code != 200:
+        raise RuntimeError(f"Cannot list rooms: HTTP {response.status_code}")
+    rooms = response.json()
+    for room in rooms:
+        if room["role"] == "owner" and room["name"] == PERSONAL_ROOM_NAME:
+            return room["id"]
+    if not rooms:
+        raise RuntimeError("No room available; create one or accept an invitation")
+    return rooms[0]["id"]
 
 
 def log_out() -> None:

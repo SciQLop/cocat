@@ -8,7 +8,7 @@ from uuid import uuid4
 import anyio
 import pytest
 from fastapi.testclient import TestClient
-from utils import add_user_to_room, create_user, wait_for_server
+from utils import create_room, create_user, wait_for_server
 
 from cocat.app.app import CocatApp
 from cocat.cli import _create_user
@@ -71,7 +71,7 @@ def user(db_path: str, room_id: str):
     email = f"user_{uuid4().hex}@foo.com"
     password = f"pwd_{uuid4().hex}"
     create_user(email, password, db_path)
-    add_user_to_room(email, room_id, db_path)
+    create_room(email, room_id, db_path)
     yield email, password
 
 

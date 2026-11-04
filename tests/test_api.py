@@ -22,9 +22,10 @@ from cocat import (
     save,
     set_config,
 )
+from cocat.cli import get_user
 
 
-def test_user_room(tmp_path, server, user, monkeypatch):
+def test_user_room(tmp_path, server, user, room_id, db_path, monkeypatch):
     with monkeypatch.context() as m:
         m.setattr(cocat.api, "save_on_exit", lambda: None)
         m.setattr(keyring, "get_credential", get_credential)
@@ -32,6 +33,7 @@ def test_user_room(tmp_path, server, user, monkeypatch):
         host, port = server
         file_path = tmp_path / "updates.y"
 
+        cocat.api.SESSION.room_id = None
         set_config(
             host=f"http://{host}",
             port=port,
@@ -39,6 +41,11 @@ def test_user_room(tmp_path, server, user, monkeypatch):
         )
 
         log_in(*user)
+
+        _, rooms = get_user(email=user[0], db_path=db_path)
+        assert cocat.api.SESSION.room_id in rooms
+        assert cocat.api.SESSION.room_id != room_id
+        assert len(cocat.api.SESSION.room_id) == 32
 
 
 def test_api(tmp_path, server, user, room_id, monkeypatch):
@@ -180,3 +187,27 @@ def test_atexit(room_id, server, user, tmp_path, monkeypatch, capsys):
         captured = capsys.readouterr()
         assert captured.out == "Changes have been saved.\n"
         atexit.unregister(cocat.api.save_on_exit)
+
+
+def test_default_room(monkeypatch):
+    def failed(*args, **kwargs):
+        return httpx.Response(500)
+
+    monkeypatch.setattr(cocat.api.httpx, "get", failed)
+    with pytest.raises(RuntimeError, match="HTTP 500"):
+        cocat.api._default_room("http://localhost:8000/")
+
+    def empty(*args, **kwargs):
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(cocat.api.httpx, "get", empty)
+    with pytest.raises(RuntimeError, match="No room available"):
+        cocat.api._default_room("http://localhost:8000/")
+
+    def rooms(*args, **kwargs):
+        return httpx.Response(
+            200, json=[{"id": "room1", "name": "Lab", "role": "editor"}]
+        )
+
+    monkeypatch.setattr(cocat.api.httpx, "get", rooms)
+    assert cocat.api._default_room("http://localhost:8000/") == "room1"

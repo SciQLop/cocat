@@ -4,10 +4,10 @@ from uuid import UUID, uuid4
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..names import PERSONAL_ROOM_NAME
 from .db import ROLE_RANK, Membership, Role, Room, User
 
 ROOM_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,64}")
-PERSONAL_ROOM_NAME = "Personal"
 
 
 class RoomError(Exception):

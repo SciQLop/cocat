@@ -1,6 +1,8 @@
 import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any, cast
+from uuid import uuid4
 
 from anycorn import Config
 from anycorn import serve as anycorn_serve
@@ -8,10 +10,13 @@ from anyio import Event, create_task_group, run, sleep_forever
 from anyioutils import create_task
 from cyclopts import App
 from fastapi_users.exceptions import UserAlreadyExists
+from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from .app import rooms
 from .app.app import CocatApp
-from .app.db import get_db
-from .app.schemas import UserCreate, UserUpdate
+from .app.db import Role, Room, get_db
+from .app.schemas import UserCreate
 from .app.secret import load_secret
 from .app.users import get_backend
 
@@ -64,13 +69,33 @@ def get_user(
     db_path: str = "./test.db",
 ):
     """
-    Get a user from the database.
+    Get a user from the database, with the IDs of their rooms.
 
     Args:
         email: The user e-mail
         db_path: The path to the user database
     """
     return run(_get_user, email, db_path)
+
+
+@app.command
+def create_room(
+    *,
+    owner: str,
+    room_id: str | None = None,
+    name: str | None = None,
+    db_path: str = "./test.db",
+):
+    """
+    Create a room owned by a user.
+
+    Args:
+        owner: The owner e-mail
+        room_id: The room ID (generated when omitted)
+        name: The room name (defaults to the room ID)
+        db_path: The path to the user database
+    """
+    run(_create_room, owner, room_id, name, db_path)
 
 
 @app.command
@@ -81,7 +106,7 @@ def add_user_to_room(
     db_path: str = "./test.db",
 ):
     """
-    Add a user to a room.
+    Add a user to an existing room, as an editor.
 
     Args:
         email: The user e-mail
@@ -107,6 +132,24 @@ def remove_user_from_room(
         db_path: The path to the user database
     """
     run(_remove_user_from_room, email, room_id, db_path)
+
+
+@app.command
+def set_room_owner(
+    *,
+    email: str,
+    room_id: str,
+    db_path: str = "./test.db",
+):
+    """
+    Make a room member the owner of the room.
+
+    Args:
+        email: The new owner e-mail
+        room_id: The room ID
+        db_path: The path to the user database
+    """
+    run(_set_room_owner, email, room_id, db_path)
 
 
 async def _serve(
@@ -138,19 +181,21 @@ async def _serve(
             await task.wait()
 
 
+def _session(user_manager: Any) -> AsyncSession:
+    return cast(SQLAlchemyUserDatabase, user_manager.user_db).session
+
+
 async def _create_user(email: str, password: str, is_superuser: bool, db_path: str):
     try:
         async with get_user_manager(db_path, True) as user_manager:
-            room_id = email.split("@")[0]
             user = await user_manager.create(
                 UserCreate(
                     email=email,
                     password=password,
                     is_superuser=is_superuser,
-                    rooms=[room_id],
                 )
             )
-            print(f"User created {user}")
+            print(f"User {email} created")
             return user
     except UserAlreadyExists:
         print(f"User {email} already exists")
@@ -159,27 +204,55 @@ async def _create_user(email: str, password: str, is_superuser: bool, db_path: s
 
 async def _get_user(email: str, db_path: str):
     async with get_user_manager(db_path) as user_manager:
-        return await user_manager.get_by_email(email)
+        user = await user_manager.get_by_email(email)
+        user_rooms = await rooms.list_user_rooms(_session(user_manager), user.id)
+        return user, [room.id for room, _ in user_rooms]
+
+
+async def _create_room(
+    owner_email: str, room_id: str | None, name: str | None, db_path: str
+) -> None:
+    async with get_user_manager(db_path) as user_manager:
+        owner = await user_manager.get_by_email(owner_email)
+        room_id = room_id or uuid4().hex
+        try:
+            room = await rooms.create_room(
+                _session(user_manager), owner, name or room_id, room_id
+            )
+        except rooms.RoomError as error:
+            print(error)
+            raise SystemExit(1)
+        print(room.id)
 
 
 async def _add_user_to_room(email: str, room_id: str, db_path: str):
     async with get_user_manager(db_path) as user_manager:
         user = await user_manager.get_by_email(email)
-        user_update = UserUpdate(
-            email=user.email,
-            rooms=list(set(user.rooms) | {room_id}),
-        )
-        await user_manager.update(user_update, user, False)
+        session = _session(user_manager)
+        if await session.get(Room, room_id) is None:
+            print(f"Room {room_id} does not exist")
+            raise SystemExit(1)
+        await rooms.add_member(session, room_id, user.id, Role.editor)
 
 
 async def _remove_user_from_room(email: str, room_id: str, db_path: str):
     async with get_user_manager(db_path) as user_manager:
         user = await user_manager.get_by_email(email)
-        user_update = UserUpdate(
-            email=user.email,
-            rooms=list(set(user.rooms) - {room_id}),
-        )
-        await user_manager.update(user_update, user, False)
+        try:
+            await rooms.remove_member(_session(user_manager), room_id, user, user.id)
+        except rooms.RoomError as error:
+            print(error)
+            raise SystemExit(1)
+
+
+async def _set_room_owner(email: str, room_id: str, db_path: str):
+    async with get_user_manager(db_path) as user_manager:
+        user = await user_manager.get_by_email(email)
+        try:
+            await rooms.set_owner(_session(user_manager), room_id, user.id)
+        except rooms.RoomError as error:
+            print(error)
+            raise SystemExit(1)
 
 
 @asynccontextmanager
