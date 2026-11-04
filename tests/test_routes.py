@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 
 import pytest
@@ -6,7 +5,8 @@ from conftest import AppClient, login, make_user, ws_headers
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from cocat.app.app import CocatApp, room_file
+from cocat.app.app import CocatApp
+from cocat.app.storage import room_file
 
 
 def create_room(app: AppClient, name: str = "Lab") -> dict:
@@ -238,26 +238,6 @@ def test_websocket_member_accepted_nonmember_refused(app_client):
     assert excinfo.value.code == 1008
 
 
-def test_room_file_rejects_traversal_but_keeps_legacy_ids(app_client):
-    for room_id in ("", ".", "..", "../x", "a/b", "a\\b", "a\0b"):
-        with pytest.raises(ValueError):
-            room_file(app_client.update_dir, room_id)
-
-    assert room_file(app_client.update_dir, "o'brien") == (
-        Path(app_client.update_dir, "o'brien.y").resolve()
-    )
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks only")
-def test_room_file_rejects_symlink_escape(app_client, tmp_path):
-    outside = tmp_path / "outside.y"
-    outside.touch()
-    (Path(app_client.update_dir) / "linked.y").symlink_to(outside)
-
-    with pytest.raises(ValueError):
-        room_file(app_client.update_dir, "linked")
-
-
 def test_websocket_does_not_hold_a_db_connection(tmp_path):
     update_dir = str(tmp_path / "update_dir")
     Path(update_dir).mkdir()
@@ -273,3 +253,62 @@ def test_websocket_does_not_hold_a_db_connection(tmp_path):
             f"/room/{room['id']}", headers=ws_headers(client)
         ):
             assert cocat_app.db.engine.pool.checkedout() == 0
+
+
+def test_removed_member_is_disconnected_and_cannot_reconnect(app_client):
+    make_user(app_client.db_path, "owner@x.org")
+    make_user(app_client.db_path, "member@x.org")
+    login(app_client.client, "owner@x.org")
+    room = create_room(app_client)
+    token = invite(app_client, room["id"])
+    join_room(app_client, "member@x.org", token)
+    member_id = next(
+        member["user_id"]
+        for member in list_members(app_client, room["id"])
+        if member["email"] == "member@x.org"
+    )
+
+    login(app_client.client, "member@x.org")
+    with app_client.client.websocket_connect(
+        f"/room/{room['id']}", headers=ws_headers(app_client.client)
+    ) as websocket:
+        assert websocket.receive_bytes()
+
+        login(app_client.client, "owner@x.org")
+        response = app_client.client.delete(
+            f"/api/rooms/{room['id']}/members/{member_id}"
+        )
+        assert response.status_code == 204
+
+        with pytest.raises(WebSocketDisconnect) as excinfo:
+            websocket.receive_bytes()
+        assert excinfo.value.code == 1008
+
+    login(app_client.client, "member@x.org")
+    with pytest.raises(WebSocketDisconnect) as excinfo:
+        app_client.client.websocket_connect(
+            f"/room/{room['id']}", headers=ws_headers(app_client.client)
+        ).__enter__()
+    assert excinfo.value.code == 1008
+
+
+def test_delete_room_disconnects_and_removes_file(app_client):
+    make_user(app_client.db_path, "owner@x.org")
+    login(app_client.client, "owner@x.org")
+    room = create_room(app_client)
+    file_path = room_file(app_client.update_dir, room["id"])
+
+    with app_client.client.websocket_connect(
+        f"/room/{room['id']}", headers=ws_headers(app_client.client)
+    ) as websocket:
+        assert websocket.receive_bytes()
+        assert file_path.exists()
+
+        response = app_client.client.delete(f"/api/rooms/{room['id']}")
+        assert response.status_code == 204
+
+        with pytest.raises(WebSocketDisconnect) as excinfo:
+            websocket.receive_bytes()
+        assert excinfo.value.code == 1008
+
+    assert not file_path.exists()

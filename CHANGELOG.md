@@ -1,5 +1,16 @@
 # Version history
 
+## 0.12.0
+
+- Back up `users.db` before upgrading.
+- Migrations run automatically, at server start and from the CLI.
+- Email-prefix rooms keep working for existing users.
+- Rooms that were shared by a prefix collision (`john@a.org` and `john@b.org` both in
+  room `john`) are listed at upgrade time, and can be fixed with
+  `cocat set-room-owner`.
+- New users get a personal room. Older SciQLop plugins cannot find it until the
+  SciQLop collaborative-catalogs plugin is updated.
+
 ## 0.11.0
 
 - Improve credential storing.

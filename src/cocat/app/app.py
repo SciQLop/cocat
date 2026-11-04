@@ -5,7 +5,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from anyio import sleep_forever
+from anyio import CancelScope, sleep_forever
 from anyio.abc import TaskStatus
 from fastapi import (
     Depends,
@@ -20,22 +20,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from wire_file import AsyncFileClient
 from wiredb import AsyncChannel, Room, RoomManager
 
-from .db import User, get_db
+from .connections import Connections
+from .db import DB, User, get_db
+from .db import Room as RoomModel
 from .ratelimit import RateLimiter, limit
 from .rooms import RoomError, list_members, list_user_rooms
 from .routes import make_api_router, room_error_handler
 from .schemas import RoomUsers, UserCreate, UserRead, UserRooms, UserUpdate
 from .secret import load_secret
+from .storage import remove_room_file, room_file
 from .users import get_backend
-
-
-def room_file(update_dir: str, room_id: str) -> Path:
-    if room_id in ("", ".", "..") or any(char in room_id for char in ("/", "\\", "\0")):
-        raise ValueError(f"Invalid room id: {room_id!r}")
-    path = (Path(update_dir) / f"{room_id}.y").resolve()
-    if not path.is_relative_to(Path(update_dir).resolve()):
-        raise ValueError(f"Invalid room id: {room_id!r}")
-    return path
 
 
 def with_route_dependency(
@@ -48,34 +42,45 @@ def with_route_dependency(
     raise ValueError(f"No route {path} on the router")
 
 
-class StoredRoom(Room):  # pragma: nocover
-    def __init__(self, directory: str, *args: Any, **kwargs: Any):
+class StoredRoom(Room):
+    def __init__(self, directory: str, db: DB, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._directory = directory
+        self._db = db
 
-    async def run(self, *args: Any, **kwargs: Any):
+    async def run(self, *args: Any, **kwargs: Any) -> None:
         await self.task_group.start(self.connect_to_file)
         await super().run(*args, **kwargs)
 
     async def connect_to_file(self, *, task_status: TaskStatus[None]) -> None:
-        async with AsyncFileClient(
-            doc=self.doc,
-            path=room_file(self._directory, self.id),
-        ):
-            task_status.started()
-            await sleep_forever()
+        try:
+            async with AsyncFileClient(
+                doc=self.doc,
+                path=room_file(self._directory, self.id),
+            ):
+                task_status.started()
+                await sleep_forever()
+        finally:
+            with CancelScope(shield=True):
+                await self.remove_file_if_room_deleted()
+
+    async def remove_file_if_room_deleted(self) -> None:
+        async with self._db.async_session_maker() as session:
+            if await session.get(RoomModel, self.id) is None:
+                remove_room_file(self._directory, self.id)
 
 
 class CocatApp:  # pragma: nocover
     def __init__(self, update_dir: str, db_path: str = "./test.db") -> None:
         db = get_db(db_path)
         self.db = db
+        self.connections = Connections()
         backend = get_backend(db, load_secret(Path(f"{db_path}.secret")))
 
         @asynccontextmanager
         async def lifespan(app: FastAPI):
             async with RoomManager(
-                partial(StoredRoom, update_dir)
+                partial(StoredRoom, update_dir, db)
             ) as self.room_manager:
                 await db.create_db_and_tables()
                 yield
@@ -135,20 +140,29 @@ class CocatApp:  # pragma: nocover
             tags=["users"],
         )
         app.add_exception_handler(RoomError, room_error_handler)
-        app.include_router(make_api_router(db, backend), prefix="/api")
+        app.include_router(
+            make_api_router(db, backend, self.connections, update_dir), prefix="/api"
+        )
 
         @app.websocket("/room/{room_id}")
         async def connect_room(
             room_id: str,
-            websocket: WebSocket | None = Depends(backend.websocket_auth),
+            authenticated: tuple[WebSocket, User] | None = Depends(
+                backend.websocket_auth
+            ),
         ):
-            if websocket is None:
+            if authenticated is None:
                 return
 
+            websocket, user = authenticated
             await websocket.accept()
-            ywebsocket = YWebSocket(websocket, room_id)
-            room = await self.room_manager.get_room(ywebsocket.id)
-            await room.serve(ywebsocket)
+            self.connections.add(room_id, user.id, websocket)
+            try:
+                ywebsocket = YWebSocket(websocket, room_id)
+                room = await self.room_manager.get_room(ywebsocket.id)
+                await room.serve(ywebsocket)
+            finally:
+                self.connections.discard(room_id, user.id, websocket)
 
         @app.get("/rooms", response_model=UserRooms)
         async def get_rooms(

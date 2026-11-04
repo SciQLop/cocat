@@ -61,7 +61,7 @@ def get_backend(db: DB, secret: str) -> Backend:
         websocket: WebSocket,
         room_id: str = Path(...),
         fastapiusersauth: Annotated[str | None, Cookie()] = None,
-    ) -> WebSocket | None:
+    ) -> tuple[WebSocket, User] | None:
         if fastapiusersauth is not None:
             async with db.async_session_maker() as session:
                 user_manager = make_user_manager(
@@ -74,7 +74,7 @@ def get_backend(db: DB, secret: str) -> Backend:
                     user is not None
                     and await get_role(session, room_id, user.id) is not None
                 ):
-                    return websocket
+                    return websocket, user
 
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return None

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .connections import Connections
 from .db import DB, Role, User
 from .invitations import (
     accept_invitation,
@@ -42,6 +43,7 @@ from .schemas import (
     RoomRename,
     UserRead,
 )
+from .storage import remove_room_file
 from .users import Backend
 
 ERROR_STATUS: dict[type[RoomError], int] = {
@@ -58,7 +60,12 @@ def room_error_handler(request: Request, exc: Exception) -> JSONResponse:
     )
 
 
-def make_api_router(db: DB, backend: Backend) -> APIRouter:
+def make_api_router(
+    db: DB,
+    backend: Backend,
+    connections: Connections,
+    update_dir: str,
+) -> APIRouter:
     router = APIRouter()
     current_user = Depends(backend.current_active_user)
     session_dependency = Depends(db.get_async_session)
@@ -102,6 +109,8 @@ def make_api_router(db: DB, backend: Backend) -> APIRouter:
         session: AsyncSession = session_dependency,
     ) -> None:
         await delete_room(session, room_id, user)
+        await connections.close(room_id)
+        remove_room_file(update_dir, room_id)
 
     @router.get("/rooms/{room_id}/members", response_model=list[MemberOut])
     async def get_members(
@@ -138,6 +147,7 @@ def make_api_router(db: DB, backend: Backend) -> APIRouter:
         session: AsyncSession = session_dependency,
     ) -> None:
         await remove_member(session, room_id, user, user_id)
+        await connections.close(room_id, user_id)
 
     @router.post("/rooms/{room_id}/owner", status_code=status.HTTP_204_NO_CONTENT)
     async def post_owner(
