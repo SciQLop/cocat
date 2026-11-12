@@ -54,9 +54,18 @@ class Catalogue(Mixin):
         return str(event.uuid) in self._map["events"]
 
     def __iter__(self) -> Generator[Event]:
-        uuids = sorted(self._map["events"].keys())
-        for uuid in uuids:
+        for uuid in self._event_uuids():
             yield self._db.get_event(uuid)
+
+    def _event_uuids(self) -> list[str]:
+        # A user can add an event to this catalogue while another user deletes it.
+        # The merge then keeps a reference to a missing event. Skipping it on read
+        # is safer than deleting it on merge, which every client would race to do.
+        return sorted(
+            uuid
+            for uuid in self._map["events"].keys()  # noqa: SIM118 -- pycrdt mistypes Map.__iter__
+            if uuid in self._db._event_maps
+        )
 
     def _get(self, name: str) -> Any:
         self._check_deleted()
@@ -138,7 +147,7 @@ class Catalogue(Mixin):
         dct["tags"] = sorted(dct["tags"].keys())
         dct["events"] = [
             uuid if event_as_uuid else Event._from_uuid(uuid, self._db).to_dict()
-            for uuid in sorted(dct["events"].keys())
+            for uuid in self._event_uuids()
         ]
         dct["attributes"] = dict(sorted(dct["attributes"].items()))
         if not event_as_uuid:
@@ -298,10 +307,9 @@ class Catalogue(Mixin):
             The (static) events in the catalogue.
         """
         self._check_deleted()
-        event_uuids = cast(Map, self._map["events"])
         return {
             Event._from_map(self._db._event_maps[uuid], self._db)
-            for uuid in event_uuids.keys()  # noqa: SIM118 -- pycrdt mistypes Map.__iter__
+            for uuid in self._event_uuids()
         }
 
     @events.setter

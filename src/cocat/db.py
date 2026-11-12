@@ -173,7 +173,7 @@ class DB:
                         for key, val in keys.items():
                             if val["action"] == "delete":
                                 removed_uuids.append(key)
-                            else:
+                            elif key in self._event_maps:
                                 added_uuids.append(key)
                         if removed_uuids:
                             callbacks = self._catalogue_change_callbacks[uuid][
