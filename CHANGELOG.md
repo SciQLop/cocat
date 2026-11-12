@@ -23,6 +23,8 @@
 - Logging in again closes the previous connection instead of leaking it.
 - A catalogue no longer breaks when one user deletes an event while another user adds
   it to that catalogue.
+- VOTable export works for empty catalogues, and each catalogue's table gets only its
+  own attribute columns.
 
 ## 0.11.0
 

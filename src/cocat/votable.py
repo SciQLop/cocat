@@ -125,171 +125,139 @@ STANDARD_FIELDS = [v[0] for v in ATTRIBUTES]
 
 
 def export_votable(catalogues: Sequence[Catalogue] | Catalogue) -> "VOTableFile":
-    from astropy.io.votable.tree import Resource, TableElement, VOTableFile
-
-    votable = VOTableFile()
+    from astropy.io.votable.tree import Resource, VOTableFile
 
     catalogue_list = (
         [catalogues] if isinstance(catalogues, Catalogue) else list(catalogues)
     )
-
+    votable = VOTableFile()
     if len(catalogue_list) == 1:
         catalogue = catalogue_list[0]
         votable.description = f"Contact:{catalogue.author};Name:{catalogue.name}"
 
     resource = Resource()
     votable.resources.append(resource)
-
-    attributes = list(ATTRIBUTES)
-
-    all_attributes = {
-        attribute for catalogue in catalogue_list for attribute in catalogue.attributes
-    }
-    common_attributes = set.intersection(
-        *[set(catalogue.attributes) for catalogue in catalogue_list]
+    resource.tables.extend(
+        _catalogue_table(votable, catalogue) for catalogue in catalogue_list
     )
-
-    for catalogue in catalogue_list:
-        table = TableElement(votable, name=catalogue.name.replace(" ", "_"))
-        resource.tables.append(table)
-
-        all_attributes = {
-            attribute for event in catalogue.events for attribute in event.attributes
-        }
-        common_attributes = set.intersection(
-            *[set(event.attributes) for event in catalogue.events]
-        )
-
-        # check that all attributes are present in every event
-        if all_attributes != common_attributes:
-            raise ValueError(
-                "Export VOTable: not all attributes are present in all events "
-                + f"{tuple(sorted(all_attributes - common_attributes))}"
-            )
-
-        for attr in sorted(all_attributes):
-            # check that the type of all attribute values is identical
-            attrs_value_types = list(
-                {type(event.attributes[attr]) for event in catalogue.events}
-            )
-            if len(attrs_value_types) != 1:
-                raise ValueError(
-                    "Export VOTable: not all value types are "
-                    + f"identical for all events for attribute {attr}"
-                )
-
-            attributes.append((attr, _vo_table_field_from(attrs_value_types[0])))
-
-        table.fields.extend(
-            [vtf.make_vot_field(votable, name) for name, vtf in attributes]
-        )
-
-        table.create_arrays(len(catalogue.events))
-        for i, event in enumerate(catalogue.events):
-            values = []
-            for k, vtf in attributes:
-                if k in STANDARD_FIELDS:
-                    v = getattr(event, k)
-                else:
-                    v = event.attributes.get(k, "")
-                if isinstance(v, set):
-                    v = list(v)
-                values.append(vtf.convert_vot(v))
-            table.array[i] = tuple(values)
-
     return votable
+
+
+def _catalogue_table(votable: "VOTableFile", catalogue: Catalogue) -> "Table":
+    from astropy.io.votable.tree import TableElement
+
+    events = list(catalogue)
+    columns = ATTRIBUTES + _attribute_columns(events)
+    table = TableElement(votable, name=catalogue.name.replace(" ", "_"))
+    table.fields.extend([vtf.make_vot_field(votable, name) for name, vtf in columns])
+    table.create_arrays(len(events))
+    for i, event in enumerate(events):
+        table.array[i] = tuple(
+            vtf.convert_vot(_event_value(event, name)) for name, vtf in columns
+        )
+    return table
+
+
+def _attribute_columns(events: list[Event]) -> list[tuple[str, _VOTableCocatField]]:
+    names = [set(event.attributes) for event in events]
+    all_names = set().union(*names)
+    missing = all_names - all_names.intersection(*names)
+    if missing:
+        raise ValueError(
+            "Export VOTable: not all attributes are present in all events "
+            + f"{tuple(sorted(missing))}"
+        )
+    return [(name, _attribute_field(events, name)) for name in sorted(all_names)]
+
+
+def _attribute_field(events: list[Event], name: str) -> _VOTableCocatField:
+    value_types = {type(event.attributes[name]) for event in events}
+    if len(value_types) != 1:
+        raise ValueError(
+            "Export VOTable: not all value types are "
+            + f"identical for all events for attribute {name}"
+        )
+    return _vo_table_field_from(value_types.pop())
+
+
+def _event_value(event: Event, name: str) -> Any:
+    if name not in STANDARD_FIELDS:
+        return event.attributes[name]
+    value = getattr(event, name)
+    return sorted(value) if isinstance(value, set) else value
+
+
+REQUIRED_FIELD_NAMES = {"Start Time", "Stop Time"}
+
+Column = tuple[int, str, _VOTableCocatField]
 
 
 def import_votable(
     votable: "VOTableFile", db: DB, table_name: str | None = None
 ) -> None:
-    author = "VOTable Import"
-    table_name = table_name or f"Imported Catalogue from {datetime.now()}"
-
-    if votable.description:
-        for line in str(votable.description).split(";"):
-            line = line.strip()
-            values = line.split(":", 1)
-            if len(values) != 2:
-                continue  # pragma: nocover
-            property, value = values
-            value = value.strip()
-            if property == "Contact":
-                author = value
-            elif property == "Name":
-                table_name = value
-
-    db_dict: dict[str, list[dict[str, Any]]] = {
-        "catalogues": [],
-        "events": [],
-    }
-
-    for i, table in enumerate(votable.iter_tables()):
-        required_field_names: list[str] = ["Start Time", "Stop Time"]
-        fields_vs_index: dict[tuple[int, str], _VOTableCocatField] = {}
-
-        for j, field in enumerate(table.fields):
-            if field.name in required_field_names:
-                required_field_names.remove(field.name)
-
-            # match field-event-signature to get converters/name
-            for vtf in VOTABLE_COCAT_FIELDS:
-                if vtf.match(field):
-                    fields_vs_index[(j, vtf.name(field))] = vtf
-                    break
-            else:  # pragma: nocover
-                raise ValueError(
-                    f"VOTable import: cannot import field: {field.ID}, {field.name}, {field.datatype},"
-                    + f" {field.xtype}"
-                )
-
-        if len(votable.resources[0].tables) == 1:
-            this_name = table_name
-        else:  # pragma: nocover
-            this_name = f"{table_name}_{i}"
-
-        if len(required_field_names) > 0:  # pragma: nocover
-            raise ValueError(
-                f"VOTable import: required fields are missing for table {this_name}"
-            )
-
-        catalogue: dict[str, Any] = {
-            "name": this_name,
-            "author": author,
-            "events": [],
-        }
-
-        has_author_field = any(f[1] == "author" for f in fields_vs_index)
-        has_uuid_field = any(f[1] == "uuid" for f in fields_vs_index)
-
-        for el in table.array:
-            event: dict[str, Any] = {"attributes": {}}
-            if not has_author_field:  # pragma: nocover
-                event["author"] = author
-
-            if not has_uuid_field:  # pragma: nocover
-                event["uuid"] = str(uuid4())
-
-            for (index, name), vtf in fields_vs_index.items():
-                if name in STANDARD_FIELDS:
-                    event[name] = vtf.convert_cocat(el[index])
-                else:
-                    event["attributes"][name] = vtf.convert_cocat(el[index])
-
-            if not any(event["uuid"] == e["uuid"] for e in db_dict["events"]):
-                db_dict["events"].append(event)
-
-            catalogue["events"].append(event["uuid"])  # type: ignore
-
-        db_dict["catalogues"].append(catalogue)
+    author, name = _description(votable, table_name)
+    tables = list(votable.iter_tables())
+    events: dict[str, dict[str, Any]] = {}
+    catalogues: dict[str, list[str]] = {}
+    for i, table in enumerate(tables):
+        this_name = name if len(tables) == 1 else f"{name}_{i}"
+        columns = _table_columns(table, this_name)
+        rows = [_event_from_row(row, columns, author) for row in table.array]
+        for event in rows:
+            events.setdefault(event["uuid"], event)
+        catalogues[this_name] = [event["uuid"] for event in rows]
 
     with db.transaction():
-        for _event in db_dict["events"]:
-            db.create_event(**_event)
-        for _catalogue in db_dict["catalogues"]:
-            events = _catalogue.pop("events", [])
-            cat = db.create_catalogue(**_catalogue)
-            cat.add_events([Event._from_uuid(uuid, db) for uuid in events])
+        for event in events.values():
+            db.create_event(**event)
+        for this_name, uuids in catalogues.items():
+            catalogue = db.create_catalogue(name=this_name, author=author)
+            catalogue.add_events([Event._from_uuid(uuid, db) for uuid in uuids])
+
+
+def _description(votable: "VOTableFile", table_name: str | None) -> tuple[str, str]:
+    """The author and catalogue name, from a "Contact:...;Name:..." description."""
+    entries = dict(
+        line.strip().split(":", 1)
+        for line in str(votable.description or "").split(";")
+        if ":" in line
+    )
+    author = entries.get("Contact", "VOTable Import").strip()
+    default_name = table_name or f"Imported Catalogue from {datetime.now()}"
+    return author, entries.get("Name", default_name).strip()
+
+
+def _table_columns(table: "Table", name: str) -> list[Column]:
+    if not REQUIRED_FIELD_NAMES <= {field.name for field in table.fields}:
+        raise ValueError(
+            f"VOTable import: required fields are missing for table {name}"
+        )
+    columns = []
+    for index, field in enumerate(table.fields):
+        vtf = _matching_field(field)
+        columns.append((index, vtf.name(field), vtf))
+    return columns
+
+
+def _matching_field(field: "VOField") -> _VOTableCocatField:
+    for vtf in VOTABLE_COCAT_FIELDS:
+        if vtf.match(field):
+            return vtf
+    raise ValueError(
+        f"VOTable import: cannot import field: {field.ID}, {field.name}, "
+        + f"{field.datatype}, {field.xtype}"
+    )
+
+
+def _event_from_row(row: Any, columns: list[Column], author: str) -> dict[str, Any]:
+    event: dict[str, Any] = {"author": author, "uuid": str(uuid4()), "attributes": {}}
+    for index, name, vtf in columns:
+        value = vtf.convert_cocat(row[index])
+        if name in STANDARD_FIELDS:
+            event[name] = value
+        else:
+            event["attributes"][name] = value
+    return event
 
 
 def import_votable_file(
