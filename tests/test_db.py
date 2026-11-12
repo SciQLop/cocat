@@ -380,3 +380,19 @@ def test_db_repr():
 }
 """
     )
+
+
+def test_remote_changes_without_listeners_register_nothing():
+    db0 = DB()
+    db1 = DB()
+    db1.sync(db0)
+
+    event = db0.create_event(start="2025-01-31", stop="2026-01-31", author="Paul")
+    event.author = "John"
+    event.add_tags("a")
+    catalogue = db0.create_catalogue(name="cat", author="Paul")
+    catalogue.name = "renamed"
+    catalogue.add_events(event)
+
+    assert not db1._event_change_callbacks
+    assert not db1._catalogue_change_callbacks

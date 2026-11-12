@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
 from typing import Any
@@ -20,12 +21,41 @@ from pycrdt import (
     create_update_message,
     handle_sync_message,
 )
+from pydantic import BaseModel
 from rich.console import Console
 from rich.pretty import pprint
 
 from .catalogue import Catalogue
 from .event import Event
 from .models import CatalogueModel, EventModel
+
+
+@dataclass
+class _Listeners:
+    """What the change dispatcher needs to know about one kind of object."""
+
+    model: type[BaseModel]
+    get: Callable[[str], Any]
+    objects: dict[str, Any]
+    on_create: list[Callable[[Any, Any], None]]
+    on_delete: dict[str, list[Callable[[Any], None]]]
+    on_change: dict[str, dict[str, list[Callable[[Any, Any], None]]]]
+
+
+def _fields_changed(
+    listeners: _Listeners, uuid: str, changes: dict[str, Any], origin: Any
+) -> None:
+    callbacks = listeners.on_change.get(uuid, {})
+    for key, change in changes.items():
+        for callback in callbacks.get(key, []):
+            callback(origin, _validated(listeners.model, key, change["newValue"]))
+
+
+def _validated(model: type[BaseModel], key: str, value: Any) -> Any:
+    instance = model.__pydantic_validator__.validate_assignment(
+        model.model_construct(), key, value
+    )
+    return getattr(instance, key)
 
 
 class DB:
@@ -62,6 +92,22 @@ class DB:
             str, dict[str, list[Callable[[Any, Any], None]]]
         ] = defaultdict(lambda: defaultdict(list))
         self._events: dict[str, Event] = {}
+        self._catalogue_listeners = _Listeners(
+            CatalogueModel,
+            self.get_catalogue,
+            self._catalogues,
+            self._catalogue_create_callbacks,
+            self._catalogue_delete_callbacks,
+            self._catalogue_change_callbacks,
+        )
+        self._event_listeners = _Listeners(
+            EventModel,
+            self.get_event,
+            self._events,
+            self._event_create_callbacks,
+            self._event_delete_callbacks,
+            self._event_change_callbacks,
+        )
 
     def __repr__(self) -> str:
         console = Console()
@@ -124,149 +170,67 @@ class DB:
     def _catalogues_changed(
         self, events: list[ArrayEvent | MapEvent], transaction: Transaction
     ) -> None:
-        for event in events:
-            path = event.path  # type: ignore[union-attr]
-            if len(path) == 0:
-                # catalogue created or deleted
-                assert isinstance(event, MapEvent)
-                keys = event.keys  # type: ignore[attr-defined]
-                for uuid in keys:
-                    action = keys[uuid]["action"]
-                    if action == "delete":
-                        for delete_callback in self._catalogue_delete_callbacks[uuid]:
-                            delete_callback(transaction.origin)
-                        if uuid in self._catalogues:
-                            del self._catalogues[uuid]
-                        del self._catalogue_delete_callbacks[uuid]
-                        self._catalogue_change_callbacks.pop(uuid, None)
-                    elif action == "add":
-                        for create_callback in self._catalogue_create_callbacks:
-                            create_callback(
-                                transaction.origin, self.get_catalogue(uuid)
-                            )
-            elif len(path) == 1:
-                # property of catalogue changed (not events)
-                assert isinstance(event, MapEvent)
-                uuid = path[0]
-                changed_keys = event.keys  # type: ignore[attr-defined]
-                for key in changed_keys:
-                    if key in self._catalogue_change_callbacks[uuid]:
-                        callbacks = self._catalogue_change_callbacks[uuid][key]
-                        for callback in callbacks:
-                            value = changed_keys[key]["newValue"]
-                            model = CatalogueModel.__pydantic_validator__.validate_assignment(
-                                CatalogueModel.model_construct(), key, value
-                            )
-                            callback(transaction.origin, getattr(model, key))
-            elif len(path) == 2:
-                if path[1] == "events":
-                    # catalogue events changed
-                    assert isinstance(event, MapEvent)
-                    uuid = path[0]
-                    if (
-                        "add_events" in self._catalogue_change_callbacks[uuid]
-                        or "remove_events" in self._catalogue_change_callbacks[uuid]
-                    ):
-                        added_uuids = []
-                        removed_uuids = []
-                        keys = event.keys  # type: ignore[attr-defined]
-                        for key, val in keys.items():
-                            if val["action"] == "delete":
-                                removed_uuids.append(key)
-                            elif key in self._event_maps:
-                                added_uuids.append(key)
-                        if removed_uuids:
-                            callbacks = self._catalogue_change_callbacks[uuid][
-                                "remove_events"
-                            ]
-                            for callback in callbacks:
-                                callback(transaction.origin, set(removed_uuids))
-                        if added_uuids:
-                            result = {
-                                Event._from_map(self._event_maps[added_uuid], self)
-                                for added_uuid in added_uuids
-                            }
-                            callbacks = self._catalogue_change_callbacks[uuid][
-                                "add_events"
-                            ]
-                            for callback in callbacks:
-                                callback(transaction.origin, result)
-                else:
-                    assert isinstance(event, MapEvent)
-                    uuid, name = path
-                    added = {}
-                    removed = set()
-                    keys = event.keys  # type: ignore[attr-defined]
-                    for key, val in keys.items():
-                        if val["action"] == "delete":
-                            removed.add(key)
-                        elif val["action"] == "add" or val["action"] == "update":
-                            added[key] = val["newValue"]
-                    if removed:
-                        callbacks = self._catalogue_change_callbacks[uuid][
-                            f"remove_{name}"
-                        ]
-                        for callback in callbacks:
-                            callback(transaction.origin, removed)
-                    if added:
-                        callbacks = self._catalogue_change_callbacks[uuid][
-                            f"add_{name}"
-                        ]
-                        for callback in callbacks:
-                            callback(transaction.origin, added)
+        self._dispatch(self._catalogue_listeners, events, transaction.origin)
 
     def _events_changed(self, events: list[MapEvent], transaction: Transaction) -> None:
+        self._dispatch(self._event_listeners, events, transaction.origin)
+
+    def _dispatch(self, listeners: _Listeners, events: list[Any], origin: Any) -> None:
         for event in events:
-            path = event.path  # type: ignore[attr-defined]
+            path, changes = event.path, event.keys
             if len(path) == 0:
-                assert isinstance(event, MapEvent)
-                keys = event.keys  # type: ignore[attr-defined]
-                for uuid in keys:
-                    action = keys[uuid]["action"]
-                    if action == "delete":
-                        for delete_callback in self._event_delete_callbacks[uuid]:
-                            delete_callback(transaction.origin)
-                        if uuid in self._events:
-                            del self._events[uuid]
-                        del self._event_delete_callbacks[uuid]
-                        self._event_change_callbacks.pop(uuid, None)
-                    elif action == "add":
-                        for create_callback in self._event_create_callbacks:
-                            create_callback(transaction.origin, self.get_event(uuid))
+                self._objects_created_or_deleted(listeners, changes, origin)
             elif len(path) == 1:
-                assert isinstance(event, MapEvent)
-                uuid = path[0]
-                changed_keys = event.keys  # type: ignore[attr-defined]
-                for key in changed_keys:
-                    if key in self._event_change_callbacks[uuid]:
-                        callbacks = self._event_change_callbacks[uuid][key]
-                        for callback in callbacks:
-                            value = changed_keys[key]["newValue"]
-                            model = (
-                                EventModel.__pydantic_validator__.validate_assignment(
-                                    EventModel.model_construct(), key, value
-                                )
-                            )
-                            callback(transaction.origin, getattr(model, key))
+                _fields_changed(listeners, path[0], changes, origin)
             elif len(path) == 2:
-                assert isinstance(event, MapEvent)
                 uuid, name = path
-                added = {}
-                removed = set()
-                keys = event.keys  # type: ignore[attr-defined]
-                for key, val in keys.items():
-                    if val["action"] == "delete":
-                        removed.add(key)
-                    elif val["action"] == "add" or val["action"] == "update":
-                        added[key] = val["newValue"]
-                if removed:
-                    callbacks = self._event_change_callbacks[uuid][f"remove_{name}"]
-                    for callback in callbacks:
-                        callback(transaction.origin, removed)
-                if added:
-                    callbacks = self._event_change_callbacks[uuid][f"add_{name}"]
-                    for callback in callbacks:
-                        callback(transaction.origin, added)
+                self._set_changed(listeners, uuid, name, changes, origin)
+
+    def _objects_created_or_deleted(
+        self, listeners: _Listeners, changes: dict[str, Any], origin: Any
+    ) -> None:
+        for uuid, change in changes.items():
+            if change["action"] == "delete":
+                for delete_callback in listeners.on_delete.pop(uuid, []):
+                    delete_callback(origin)
+                listeners.objects.pop(uuid, None)
+                listeners.on_change.pop(uuid, None)
+            elif change["action"] == "add":
+                for callback in listeners.on_create:
+                    callback(origin, listeners.get(uuid))
+
+    def _set_changed(
+        self,
+        listeners: _Listeners,
+        uuid: str,
+        name: str,
+        changes: dict[str, Any],
+        origin: Any,
+    ) -> None:
+        callbacks = listeners.on_change.get(uuid, {})
+        removed = {
+            key for key, change in changes.items() if change["action"] == "delete"
+        }
+        added = {
+            key: change["newValue"]
+            for key, change in changes.items()
+            if change["action"] in ("add", "update")
+        }
+        if removed:
+            for callback in callbacks.get(f"remove_{name}", []):
+                callback(origin, removed)
+        value = self._catalogue_events(added) if name == "events" else added
+        if value:
+            for callback in callbacks.get(f"add_{name}", []):
+                callback(origin, value)
+
+    def _catalogue_events(self, uuids: Iterable[str]) -> set[Event]:
+        # An event deleted elsewhere can still be added to a catalogue by a merge.
+        return {
+            Event._from_map(self._event_maps[uuid], self)
+            for uuid in uuids
+            if uuid in self._event_maps
+        }
 
     @property
     def catalogues(self) -> set[Catalogue]:
