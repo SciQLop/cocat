@@ -83,7 +83,7 @@ def get_backend(db: DB, secret: str) -> Backend:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return None
 
-    def get_jwt_strategy() -> JWTStrategy[models.UP, models.ID]:  # pragma: nocover
+    def get_jwt_strategy() -> JWTStrategy[models.UP, models.ID]:
         return JWTStrategy(secret=secret, lifetime_seconds=3600)
 
     auth_backend: AuthenticationBackend = AuthenticationBackend(

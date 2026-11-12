@@ -349,3 +349,9 @@ def test_delete_room_disconnects_every_member(app_client):
             with pytest.raises(WebSocketDisconnect) as excinfo:
                 socket.receive_bytes()
             assert excinfo.value.code == 1008
+
+
+@pytest.mark.parametrize("prefix", ["cocat", "/cocat/", "cocat/"])
+def test_proxy_prefix_becomes_the_root_path(monkeypatch, update_dir, db_path, prefix):
+    monkeypatch.setenv("COCAT_PROXY_PREFIX", prefix)
+    assert CocatApp(update_dir, db_path).app.root_path == "/cocat"

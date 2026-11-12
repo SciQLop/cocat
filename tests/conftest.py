@@ -2,6 +2,7 @@ import os
 import signal
 import subprocess
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -107,8 +108,8 @@ def user(db_path: str, room_id: str):
     yield email, password
 
 
-@pytest.fixture()
-def server(free_tcp_port: int, update_dir: str, db_path: str):
+@contextmanager
+def running_server(port: int, update_dir: str, db_path: str) -> Iterator[str]:
     host = "127.0.0.1"
     command = [
         "cocat",
@@ -116,15 +117,22 @@ def server(free_tcp_port: int, update_dir: str, db_path: str):
         "--host",
         host,
         "--port",
-        str(free_tcp_port),
+        str(port),
         "--update_dir",
         update_dir,
         "--db_path",
         db_path,
     ]
     p = subprocess.Popen(command)
-    url = f"http://{host}:{free_tcp_port}"
-    wait_for_server(url, p)
-    yield host, free_tcp_port
-    os.kill(p.pid, signal.SIGINT)
-    p.wait()
+    try:
+        wait_for_server(f"http://{host}:{port}", p)
+        yield host
+    finally:
+        os.kill(p.pid, signal.SIGINT)
+        p.wait()
+
+
+@pytest.fixture()
+def server(free_tcp_port: int, update_dir: str, db_path: str):
+    with running_server(free_tcp_port, update_dir, db_path) as host:
+        yield host, free_tcp_port

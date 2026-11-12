@@ -86,3 +86,7 @@ lint.extend-select = ["I"]
 # FastAPI's dependency injection is declared as `Depends(...)` argument defaults.
 "src/cocat/app/*" = ["B008"]
 "tests/*" = ["ASYNC210", "SIM117"]
+
+[tool.coverage.run]
+# The server tests start `cocat serve` as a child process; measure it too.
+patch = ["subprocess"]

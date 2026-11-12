@@ -4,11 +4,13 @@ from uuid import uuid4
 import httpx
 import pytest
 from anyio import fail_after, sleep
+from conftest import running_server
 from utils import add_user_to_room, create_user, wait_for_server
 from wire_file import AsyncFileClient
 from wire_websocket import AsyncWebSocketClient, AsyncWebSocketServer
 
 from cocat import DB
+from cocat.app.storage import room_file
 
 pytestmark = pytest.mark.anyio
 
@@ -206,3 +208,47 @@ def test_wait_for_server_raises_when_never_ready():
 
     with pytest.raises(RuntimeError, match="did not start within -1 s"):
         wait_for_server("http://127.0.0.1:1", process, timeout=-1)
+
+
+async def wait_until(condition, timeout: float = 2.0) -> None:
+    with fail_after(timeout):
+        while not condition():
+            await sleep(0.01)
+
+
+async def stored_db(path: str) -> DB:
+    db = DB()
+    async with AsyncFileClient(doc=db.doc, path=path):
+        pass
+    return db
+
+
+def room_client(host: str, port: int, room_id: str, cookies: httpx.Cookies):
+    return AsyncWebSocketClient(
+        id=f"room/{room_id}", host=f"http://{host}", port=port, cookies=cookies
+    )
+
+
+async def test_room_survives_a_server_restart(
+    free_tcp_port, user, room_id, update_dir, db_path
+):
+    port = free_tcp_port
+    with running_server(port, update_dir, db_path) as host:
+        cookies = login(host, port, *user)
+        async with (
+            room_client(host, port, room_id, cookies) as writer,
+            room_client(host, port, room_id, cookies) as witness,
+        ):
+            event = DB(doc=writer.doc).create_event(
+                start="2025-01-31", stop="2026-01-31", author="Paul"
+            )
+            witness_db = DB(doc=witness.doc)
+            await wait_until(lambda: len(witness_db.events) == 1)
+
+    assert (await stored_db(room_file(update_dir, room_id))).events == {event}
+
+    with running_server(port, update_dir, db_path) as host:
+        async with room_client(host, port, room_id, cookies) as client:
+            db = DB(doc=client.doc)
+            await wait_until(lambda: len(db.events) == 1)
+            assert db.events == {event}

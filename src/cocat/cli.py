@@ -1,4 +1,3 @@
-import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
@@ -37,7 +36,7 @@ def serve(
         update_dir: The path to the directory where the room updates are saved
         db_path: The path to the user database
     """
-    run(_serve, host, port, update_dir, db_path)  # pragma: nocover
+    run(_serve, host, port, update_dir, db_path)
 
 
 @app.command
@@ -149,31 +148,24 @@ def set_room_owner(
     run(_set_room_owner, email, room_id, db_path)
 
 
-async def _serve(
-    host: str, port: int, update_dir: str, db_path: str
-):  # pragma: nocover
+async def _serve(host: str, port: int, update_dir: str, db_path: str):
     config = Config()
     config.bind = [f"{host}:{port}"]
     shutdown_event = Event()
-    tb = None
     cocat_app = CocatApp(update_dir, db_path)
     async with create_task_group() as tg:
+        task = create_task(
+            anycorn_serve(
+                cocat_app.app,  # type: ignore[arg-type]
+                config,
+                shutdown_trigger=shutdown_event.wait,
+                mode="asgi",
+            ),
+            tg,
+        )
         try:
-            task = create_task(
-                anycorn_serve(
-                    cocat_app.app,  # type: ignore[arg-type]
-                    config,
-                    shutdown_trigger=shutdown_event.wait,
-                    mode="asgi",
-                ),
-                tg,
-            )
             await sleep_forever()
-        except Exception:  # noqa: BLE001 -- log any crash, then shut down cleanly
-            tb = traceback.format_exc()
         finally:
-            if tb is not None:
-                print(tb)
             shutdown_event.set()
             await task.wait()
 

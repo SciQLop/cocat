@@ -70,7 +70,7 @@ class StoredRoom(Room):
                 remove_room_file(self._directory, self.id)
 
 
-class CocatApp:  # pragma: nocover
+class CocatApp:
     def __init__(self, update_dir: str, db_path: str = "./test.db") -> None:
         db = get_db(db_path)
         self.db = db
@@ -185,7 +185,7 @@ class CocatApp:  # pragma: nocover
             return {"users": [member.email for member, _ in members]}
 
 
-class YWebSocket(AsyncChannel):  # pragma: nocover
+class YWebSocket(AsyncChannel):
     def __init__(self, websocket: WebSocket, path: str) -> None:
         self._websocket = websocket
         self._path = path
@@ -196,7 +196,7 @@ class YWebSocket(AsyncChannel):  # pragma: nocover
 
     async def __anext__(self):
         try:
-            return await self._websocket.receive_bytes()
+            return await self.receive()
         except WebSocketDisconnect:
             raise StopAsyncIteration()
 
