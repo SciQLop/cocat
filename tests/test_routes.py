@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,7 @@ from conftest import (
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from cocat.app.app import CocatApp
+from cocat.app.app import CocatApp, StoredRoom
 from cocat.app.storage import room_file
 
 
@@ -317,7 +318,7 @@ def test_delete_room_disconnects_and_removes_file(app_client):
             websocket.receive_bytes()
         assert excinfo.value.code == 1008
 
-    assert not file_path.exists()
+    wait_until(lambda: not file_path.exists())
 
 
 def test_delete_room_disconnects_every_member(app_client):
@@ -355,3 +356,31 @@ def test_delete_room_disconnects_every_member(app_client):
 def test_proxy_prefix_becomes_the_root_path(monkeypatch, update_dir, db_path, prefix):
     monkeypatch.setenv("COCAT_PROXY_PREFIX", prefix)
     assert CocatApp(update_dir, db_path).app.root_path == "/cocat"
+
+
+def test_room_stops_when_its_last_member_leaves(app_client, monkeypatch):
+    stopped = []
+    monkeypatch.setattr(
+        StoredRoom, "remove_file_if_room_deleted", lambda room: _record(stopped, room)
+    )
+    make_user(app_client.db_path, "owner@x.org")
+    login(app_client.client, "owner@x.org")
+    room = create_room(app_client)
+
+    with app_client.client.websocket_connect(
+        f"/room/{room['id']}", headers=ws_headers(app_client.client)
+    ) as websocket:
+        websocket.receive_bytes()
+
+    wait_until(lambda: stopped == [room["id"]])
+
+
+async def _record(stopped: list[str], room: StoredRoom) -> None:
+    stopped.append(room.id)
+
+
+def wait_until(condition, timeout: float = 2.0) -> None:
+    deadline = time.monotonic() + timeout
+    while not condition():  # pragma: nocover -- only loops on a slow machine
+        assert time.monotonic() < deadline, "timed out"
+        time.sleep(0.01)

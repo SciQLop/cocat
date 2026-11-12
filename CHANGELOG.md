@@ -25,6 +25,8 @@
   it to that catalogue.
 - VOTable export works for empty catalogues, and each catalogue's table gets only its
   own attribute columns.
+- A room stops when its last member leaves. Before, it kept running with its file open,
+  so a long-running server leaked one open file and one document per session.
 
 ## 0.11.0
 

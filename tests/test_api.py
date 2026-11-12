@@ -1,6 +1,8 @@
 import atexit
 import builtins
 import time
+from contextlib import suppress
+from types import SimpleNamespace
 
 import httpx
 import keyring
@@ -253,7 +255,9 @@ def test_edits_saved_during_an_outage_reach_the_server_later(
             log_in(*user)
 
         event = create_event(start="2025-01-31", stop="2026-01-31", author="Paul")
-        with pytest.raises(RuntimeError, match="saved locally"):
+        # Windows buffers a send to a closed socket, so save() may not notice the
+        # outage; the edit must reach the server either way.
+        with suppress(RuntimeError):
             save()
 
         m.setattr(cocat.api.SESSION, "db", DB())  # a new process: only the file is left
@@ -266,3 +270,20 @@ def test_edits_saved_during_an_outage_reach_the_server_later(
         with FileClient(doc=stored.doc, path=room_file(update_dir, room_id)) as file:
             file.pull()
         assert event.uuid in {e.uuid for e in stored.events}
+
+
+def test_save_writes_the_file_even_when_the_server_is_unreachable(monkeypatch):
+    written = []
+
+    def unreachable():
+        raise OSError("connection reset")
+
+    monkeypatch.setattr(api.SESSION, "connected", True)
+    monkeypatch.setattr(
+        api.SESSION, "file", SimpleNamespace(push=lambda: written.append(True)), False
+    )
+    monkeypatch.setattr(api.SESSION, "client", SimpleNamespace(push=unreachable), False)
+
+    with pytest.raises(RuntimeError, match="saved locally"):
+        save()
+    assert written == [True]

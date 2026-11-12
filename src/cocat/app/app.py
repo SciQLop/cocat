@@ -1,5 +1,5 @@
 import os
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
@@ -47,6 +47,15 @@ class StoredRoom(Room):
         super().__init__(*args, **kwargs)
         self._directory = directory
         self._db = db
+
+    @asynccontextmanager
+    async def __asynccontextmanager__(self) -> AsyncGenerator["StoredRoom"]:
+        # simplify: wiredb's Room does not cancel its tasks on exit, so a room whose
+        # last member left kept running with its file open. Drop this override once
+        # wiredb cancels them itself.
+        async with super().__asynccontextmanager__() as room:
+            yield room
+            self.task_group.cancel_scope.cancel()
 
     async def run(self, *args: Any, **kwargs: Any) -> None:
         await self.task_group.start(self.connect_to_file)
