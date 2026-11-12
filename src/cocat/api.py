@@ -63,7 +63,14 @@ class Session:
         if not self.connected:
             raise RuntimeError("Not logged in")
 
+    def disconnect(self) -> None:
+        if self.exit_stack is not None:
+            self.exit_stack.close()
+            self.exit_stack = None
+        self.connected = False
+
     def connect(self) -> None:
+        self.disconnect()
         with ExitStack() as exit_stack:
             self.client = exit_stack.enter_context(
                 WebSocketClient(
@@ -177,9 +184,7 @@ def log_out() -> None:
         f"{SESSION.host}:{SESSION.port}/auth/jwt/logout", cookies=SESSION.cookies
     )
     SESSION.cookies = httpx.Cookies()
-    SESSION.connected = False
-    if SESSION.exit_stack is not None:
-        SESSION.exit_stack.close()
+    SESSION.disconnect()
 
 
 def create_catalogue(
@@ -286,10 +291,19 @@ def refresh() -> None:
 
 def save() -> None:
     """
-    Sends local changes to the server.
+    Writes local changes to the local file, then sends them to the server.
     """
     SESSION.check_connected()
-    SESSION.client.push()
+    # The file comes first, so the changes survive a server that is unreachable.
+    SESSION.file.push()
+    # The websocket stack raises several unrelated types (wsproto, httpx-ws, OSError).
+    try:
+        SESSION.client.push()
+    except Exception as exc:
+        raise RuntimeError(
+            "Changes are saved locally, but the server is unreachable. "
+            "Log in again and save to send them."
+        ) from exc
 
 
 def import_votable(
@@ -323,6 +337,5 @@ def save_on_exit() -> None:
         response = input("Save changes (Y/n)? ")
         if not response or response.lower().startswith("y"):
             save()
-            if SESSION.exit_stack is not None:
-                SESSION.exit_stack.close()
-                print("Changes have been saved.")
+            SESSION.disconnect()
+            print("Changes have been saved.")

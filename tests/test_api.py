@@ -5,7 +5,9 @@ import time
 import httpx
 import keyring
 import pytest
+from conftest import running_server
 from utils import get_credential, set_password
+from wire_file import FileClient
 from wire_websocket import WebSocketClient
 
 import cocat.api
@@ -22,6 +24,7 @@ from cocat import (
     save,
     set_config,
 )
+from cocat.app.storage import room_file
 from cocat.cli import get_user
 
 
@@ -211,3 +214,55 @@ def test_default_room(monkeypatch):
 
     monkeypatch.setattr(cocat.api.httpx, "get", rooms)
     assert cocat.api._default_room("http://localhost:8000/") == "room1"
+
+
+def test_save_keeps_a_local_copy(tmp_path, server, user, room_id, monkeypatch):
+    with monkeypatch.context() as m:
+        m.setattr(cocat.api, "save_on_exit", lambda: None)
+        m.setattr(keyring, "get_credential", get_credential)
+        m.setattr(keyring, "set_password", set_password)
+        host, port = server
+        file_path = tmp_path / "updates.y"
+        set_config(
+            host=f"http://{host}", port=port, file_path=file_path, room_id=room_id
+        )
+        log_in(*user)
+        event = create_event(start="2025-01-31", stop="2026-01-31", author="Paul")
+        save()
+        log_out()
+
+        local = DB()
+        with FileClient(doc=local.doc, path=file_path) as file:
+            file.pull()
+        assert event.uuid in {e.uuid for e in local.events}
+
+
+def test_edits_saved_during_an_outage_reach_the_server_later(
+    tmp_path, free_tcp_port, user, room_id, update_dir, db_path, monkeypatch
+):
+    with monkeypatch.context() as m:
+        m.setattr(cocat.api, "save_on_exit", lambda: None)
+        m.setattr(keyring, "get_credential", get_credential)
+        m.setattr(keyring, "set_password", set_password)
+        port = free_tcp_port
+        file_path = tmp_path / "updates.y"
+        with running_server(port, update_dir, db_path) as host:
+            set_config(
+                host=f"http://{host}", port=port, file_path=file_path, room_id=room_id
+            )
+            log_in(*user)
+
+        event = create_event(start="2025-01-31", stop="2026-01-31", author="Paul")
+        with pytest.raises(RuntimeError, match="saved locally"):
+            save()
+
+        m.setattr(cocat.api.SESSION, "db", DB())  # a new process: only the file is left
+        with running_server(port, update_dir, db_path):
+            log_in(*user)
+            save()
+            log_out()
+
+        stored = DB()
+        with FileClient(doc=stored.doc, path=room_file(update_dir, room_id)) as file:
+            file.pull()
+        assert event.uuid in {e.uuid for e in stored.events}

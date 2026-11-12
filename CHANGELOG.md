@@ -17,6 +17,12 @@
   supplied with `COCAT_SECRET`.
 - Breaking: `Session.connect()` no longer takes a `room_id`, call
   `set_config(room_id=...)` before `log_in`.
+- `save()` writes changes to the local file again. Changes saved while the server is
+  down are sent at the next `log_in` and `save()`, and `save()` says so instead of
+  raising a websocket error.
+- Logging in again closes the previous connection instead of leaking it.
+- A catalogue no longer breaks when one user deletes an event while another user adds
+  it to that catalogue.
 
 ## 0.11.0
 
